@@ -1,0 +1,498 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+
+/* Band widths are the ISO 10816-3 Class II boundaries laid out proportionally.
+   The same scale drives the rail on each machine card and the y-axis of the
+   trend chart, so both read as one instrument. */
+const BANDS = [
+  { zone: "A", to: 2.8, span: 28, color: "var(--zone-a)" },
+  { zone: "B", to: 4.5, span: 17, color: "var(--zone-b)" },
+  { zone: "C", to: 7.1, span: 26, color: "var(--zone-c)" },
+  { zone: "D", to: 10.0, span: 29, color: "var(--zone-d)" },
+];
+const ZONE_D = 7.1;
+
+/** RMS (mm/s) -> 0..100 position along the severity scale. */
+function scalePos(rms: number): number {
+  let base = 0;
+  let from = 0;
+  for (const b of BANDS) {
+    if (rms <= b.to || b.zone === "D") {
+      const t = Math.min(1, (rms - from) / (b.to - from));
+      return base + t * b.span;
+    }
+    base += b.span;
+    from = b.to;
+  }
+  return 100;
+}
+
+const money = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+interface Machine {
+  id: number;
+  tag: string;
+  name: string;
+  criticalPart: string;
+  downtimeCostPerHour: number;
+  stock: number;
+  currentRms: number;
+  zone: "A" | "B" | "C" | "D";
+  rulHours: number | null;
+  r2: number;
+}
+
+interface Sample {
+  hours: number;
+  rms: number;
+}
+
+interface PO {
+  id: number;
+  supplier: string;
+  status: string;
+  agentFunded: boolean;
+  machineId: number;
+  amountUsd: number;
+  partNo: string;
+}
+
+interface Chain {
+  foreman: string;
+  agent: string;
+  availableUsd: number;
+  escrowedUsd: number;
+  monthlyCapUsd: number;
+  autoApproveMaxUsd: number;
+  remainingBudgetUsd: number;
+  pos: PO[];
+}
+
+interface Step {
+  kind: "thought" | "tool" | "action";
+  label: string;
+  detail: string;
+  txHash?: string;
+}
+
+interface State {
+  hours: number;
+  machineId: number;
+  machines: Machine[];
+  series: Sample[];
+  quotes: { supplier: string; priceUsd: number; leadTimeHours: number }[];
+  chain: Chain | null;
+  chainError: string | null;
+}
+
+export default function Dashboard() {
+  const [hours, setHours] = useState(300);
+  const [machineId, setMachineId] = useState(7);
+  const [data, setData] = useState<State | null>(null);
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [summary, setSummary] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/state?hours=${hours}&machine=${machineId}`, { cache: "no-store" });
+    setData(await res.json());
+  }, [hours, machineId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function runAgent() {
+    setBusy("agent");
+    setError(null);
+    setSteps([]);
+    setSummary("");
+    try {
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error);
+      setSteps(out.steps);
+      setSummary(out.summary);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function poAction(action: string, id: number) {
+    setBusy(`${action}-${id}`);
+    setError(null);
+    try {
+      const res = await fetch("/api/po", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, id }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const chain = data?.chain ?? null;
+  const selected = data?.machines.find((m) => m.id === machineId);
+  const waiting = chain?.pos.filter((p) => p.status === "Proposed") ?? [];
+  const open = chain?.pos.filter((p) => p.status !== "Proposed") ?? [];
+
+  return (
+    <main className="shell">
+      <header className="masthead">
+        <span className="wordmark">Foreman</span>
+        <span className="tagline">
+          The machine asks for its own spare part. A human sets the limit, once.
+        </span>
+        <label className="eyebrow" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          run hour {hours}
+          <input
+            type="range"
+            min={240}
+            max={340}
+            step={4}
+            value={hours}
+            onChange={(e) => setHours(Number(e.target.value))}
+            style={{ width: 150 }}
+          />
+        </label>
+      </header>
+
+      {data?.chainError && (
+        <p className="error">
+          Contracts not reachable — run <code>node scripts/deploy.mjs</code> first.
+          {"\n"}
+          {data.chainError}
+        </p>
+      )}
+      {error && <p className="error">{error}</p>}
+
+      <section className="strip">
+        <div>
+          <div className="eyebrow">Plant treasury</div>
+          <div className="value">{money(chain?.availableUsd ?? 0)}</div>
+          <div className="sub">uncommitted USDC</div>
+        </div>
+        <div>
+          <div className="eyebrow">In escrow</div>
+          <div className="value">{money(chain?.escrowedUsd ?? 0)}</div>
+          <div className="sub">committed to open orders</div>
+        </div>
+        <div>
+          <div className="eyebrow">Agent budget left</div>
+          <div className="value">{money(chain?.remainingBudgetUsd ?? 0)}</div>
+          <div className="sub">of {money(chain?.monthlyCapUsd ?? 0)} per 30 days</div>
+        </div>
+        <div>
+          <div className="eyebrow">Signs alone up to</div>
+          <div className="value">{money(chain?.autoApproveMaxUsd ?? 0)}</div>
+          <div className="sub">above this, a human approves</div>
+        </div>
+      </section>
+
+      <div className="columns">
+        <div className="stack">
+          <section className="panel">
+            <header>
+              <h2 style={{ fontSize: 13 }}>Line 3 — machining</h2>
+              <span className="eyebrow">ISO 10816-3 class II</span>
+            </header>
+            <div className="machines">
+              {data?.machines.map((m) => (
+                <button
+                  key={m.id}
+                  className="machine"
+                  aria-pressed={m.id === machineId}
+                  onClick={() => setMachineId(m.id)}
+                >
+                  <div className="tag">{m.tag}</div>
+                  <div className="name">{m.name}</div>
+                  <div className="reading">
+                    <span className="rms">{m.currentRms.toFixed(2)}</span>
+                    <span className="unit">mm/s RMS</span>
+                  </div>
+                  <Rail rms={m.currentRms} />
+                  <div className="rul">
+                    {m.rulHours === null ? (
+                      <>trend flat — no failure projected</>
+                    ) : (
+                      <>
+                        zone D in <b>{m.rulHours} h</b> · {money(m.downtimeCostPerHour)}/h if it stops
+                      </>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <header>
+              <h2 style={{ fontSize: 13 }}>{selected?.tag} vibration trend</h2>
+              <span className="eyebrow">
+                {selected?.criticalPart} · {selected?.stock ?? 0} on hand
+              </span>
+            </header>
+            <div className="body">
+              <Trend samples={data?.series ?? []} rulHours={selected?.rulHours ?? null} />
+            </div>
+          </section>
+        </div>
+
+        <div className="stack">
+          <section className="panel">
+            <header>
+              <h2 style={{ fontSize: 13 }}>Agent</h2>
+              <button className="btn primary" onClick={runAgent} disabled={busy !== null}>
+                {busy === "agent" ? "Working…" : "Run agent"}
+              </button>
+            </header>
+            <div className="body">
+              {steps.length === 0 && !summary && (
+                <p className="empty">
+                  Nothing yet. Run the agent and it will read telemetry, price the part, and commit
+                  funds if the machine needs it.
+                </p>
+              )}
+              <div className="log">
+                {steps.map((s, i) => (
+                  <div key={i} className={`step ${s.kind}`}>
+                    <span className="mark">
+                      {s.kind === "tool" ? "→" : s.kind === "action" ? "◆" : "·"}
+                    </span>
+                    <div>
+                      <div className="label">{s.label}</div>
+                      {s.detail && <div className="detail">{s.detail}</div>}
+                      {s.txHash && (
+                        <a
+                          className="detail"
+                          href={`https://sepolia.basescan.org/tx/${s.txHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ display: "inline-block", marginTop: 4 }}
+                        >
+                          {s.txHash.slice(0, 18)}… ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {summary && (
+                <p className="detail" style={{ marginTop: 14, borderTop: "1px solid var(--rule)", paddingTop: 12 }}>
+                  {summary}
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <header>
+              <h2 style={{ fontSize: 13 }}>Waiting on you</h2>
+              {waiting.length > 0 && <span className="badge wait">{waiting.length}</span>}
+            </header>
+            <div className="body">
+              {waiting.length === 0 && <p className="empty">Nothing waiting on you.</p>}
+              {waiting.map((po) => (
+                <div className="po" key={po.id}>
+                  <div className="line">
+                    <span className="part">
+                      {po.partNo} · machine {po.machineId}
+                    </span>
+                    <span className="amount">{money(po.amountUsd)}</span>
+                  </div>
+                  <div className="meta">
+                    Over the {money(chain?.autoApproveMaxUsd ?? 0)} ceiling the agent may sign alone.
+                  </div>
+                  <div className="actions">
+                    <button
+                      className="btn primary"
+                      disabled={busy !== null}
+                      onClick={() => poAction("approve", po.id)}
+                    >
+                      {busy === `approve-${po.id}` ? "Approving…" : `Approve ${money(po.amountUsd)}`}
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={busy !== null}
+                      onClick={() => poAction("cancel", po.id)}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <header>
+              <h2 style={{ fontSize: 13 }}>Purchase orders</h2>
+              <span className="eyebrow">on chain</span>
+            </header>
+            <div className="body">
+              {open.length === 0 && <p className="empty">No orders placed yet.</p>}
+              {open.map((po) => (
+                <div className="po" key={po.id}>
+                  <div className="line">
+                    <span className="part">
+                      #{po.id} {po.partNo}
+                    </span>
+                    <span className="amount">{money(po.amountUsd)}</span>
+                  </div>
+                  <div className="line">
+                    <span className="meta">
+                      {po.agentFunded ? "signed by agent" : "approved by plant"}
+                    </span>
+                    <span className="badge">{po.status}</span>
+                  </div>
+                  <div className="actions">
+                    {po.status === "Funded" && (
+                      <button
+                        className="btn"
+                        disabled={busy !== null}
+                        onClick={() => poAction("ship", po.id)}
+                      >
+                        {busy === `ship-${po.id}` ? "…" : "Supplier ships"}
+                      </button>
+                    )}
+                    {(po.status === "Funded" || po.status === "Shipped") && (
+                      <button
+                        className="btn primary"
+                        disabled={busy !== null}
+                        onClick={() => poAction("confirm", po.id)}
+                      >
+                        {busy === `confirm-${po.id}` ? "…" : "Confirm receipt & pay"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Rail({ rms }: { rms: number }) {
+  const pos = scalePos(rms);
+  const active = BANDS.find((b) => rms <= b.to) ?? BANDS[3];
+  return (
+    <>
+      <div className="rail">
+        {BANDS.map((b) => (
+          <i
+            key={b.zone}
+            className={b.zone === active.zone ? "lit" : ""}
+            style={{ background: b.color }}
+          />
+        ))}
+        <span className="needle" style={{ left: `${pos}%` }} />
+      </div>
+      <div className="raillabels">
+        <span>A</span>
+        <span>B</span>
+        <span>C</span>
+        <span>D stop</span>
+      </div>
+    </>
+  );
+}
+
+function Trend({ samples, rulHours }: { samples: Sample[]; rulHours: number | null }) {
+  const W = 820;
+  const H = 240;
+  if (samples.length < 2) return <p className="empty">No telemetry.</p>;
+
+  const last = samples[samples.length - 1];
+  const xMax = last.hours + (rulHours ?? 0) * 1.25 + 10;
+  const x = (h: number) => (h / xMax) * W;
+  const y = (rms: number) => H - (scalePos(rms) / 100) * H;
+
+  // One point per ~3px is plenty; the rest is noise the eye cannot resolve.
+  const stride = Math.max(1, Math.floor(samples.length / 260));
+  const line = samples
+    .filter((_, i) => i % stride === 0 || i === samples.length - 1)
+    .map((s) => `${x(s.hours).toFixed(1)},${y(s.rms).toFixed(1)}`)
+    .join(" ");
+
+  const crossX = rulHours !== null ? x(last.hours + rulHours) : null;
+
+  // Bands stack from the bottom: zone A sits at the floor, matching y().
+  let base = 0;
+  const bands = BANDS.map((b) => {
+    const top = H - ((base + b.span) / 100) * H;
+    base += b.span;
+    return { ...b, top, height: (b.span / 100) * H };
+  });
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img"
+      aria-label={`Vibration trend. Now ${last.rms.toFixed(2)} millimetres per second.${
+        rulHours !== null ? ` Zone D projected in ${rulHours} hours.` : ""
+      }`}>
+      {bands.map((b) => (
+        <g key={b.zone}>
+          <rect x={0} y={b.top} width={W} height={b.height} fill={b.color} opacity={0.09} />
+          <text x={6} y={b.top + 13} fill={b.color} fontSize={10} opacity={0.85}>
+            {b.zone}
+          </text>
+        </g>
+      ))}
+
+      {crossX !== null && (
+        <>
+          <line
+            x1={x(last.hours)}
+            y1={y(last.rms)}
+            x2={crossX}
+            y2={y(ZONE_D)}
+            stroke="var(--ink)"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+            opacity={0.75}
+          />
+          <line x1={crossX} y1={0} x2={crossX} y2={H} stroke="var(--zone-d)" strokeWidth={1} opacity={0.5} />
+          <text
+            x={Math.min(crossX + 8, W - 150)}
+            y={18}
+            fill="var(--zone-d)"
+            fontSize={11}
+            fontFamily="var(--font-mono)"
+          >
+            zone D · {rulHours} h
+          </text>
+        </>
+      )}
+
+      <polyline points={line} fill="none" stroke="var(--ink)" strokeWidth={1.6} />
+      <circle cx={x(last.hours)} cy={y(last.rms)} r={3.5} fill="var(--ink)" />
+      <text
+        x={Math.max(6, x(last.hours) - 120)}
+        y={Math.max(14, y(last.rms) - 10)}
+        fill="var(--ink)"
+        fontSize={11}
+        fontFamily="var(--font-mono)"
+      >
+        now {last.rms.toFixed(2)} mm/s
+      </text>
+    </svg>
+  );
+}
