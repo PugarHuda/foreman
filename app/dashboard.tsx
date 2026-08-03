@@ -28,6 +28,14 @@ function scalePos(rms: number): number {
   return 100;
 }
 
+/* Present only when the demo is deployed somewhere public — see lib/guard.ts. */
+const POST_HEADERS: Record<string, string> = {
+  "Content-Type": "application/json",
+  ...(process.env.NEXT_PUBLIC_DEMO_SECRET
+    ? { "x-demo-secret": process.env.NEXT_PUBLIC_DEMO_SECRET }
+    : {}),
+};
+
 const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
@@ -113,7 +121,7 @@ export default function Dashboard() {
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: POST_HEADERS,
         body: JSON.stringify({ hours }),
       });
       const out = await res.json();
@@ -134,7 +142,7 @@ export default function Dashboard() {
     try {
       const res = await fetch("/api/po", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: POST_HEADERS,
         body: JSON.stringify({ action, id }),
       });
       const out = await res.json();

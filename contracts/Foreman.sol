@@ -49,9 +49,18 @@ contract Foreman {
     uint128 public available; // deposited, uncommitted
     uint128 public escrowed; // committed to open POs
 
+    /**
+     * Payees the plant has vetted. The agent picks among them; it cannot
+     * invent one. This is the line that holds if the model hallucinates an
+     * address or someone poisons its inputs — the model chooses, the plant
+     * decides who is choosable.
+     */
+    mapping(address => bool) public approvedSupplier;
+
     PO[] private _pos;
 
     event PolicySet(address agent, uint128 monthlyCap, uint128 autoApproveMax);
+    event SupplierSet(address indexed supplier, bool approved);
     event Deposited(uint128 amount);
     event Withdrawn(uint128 amount);
     event Proposed(uint256 indexed id, uint32 indexed machineId, address indexed supplier, uint128 amount, string partNo);
@@ -66,6 +75,7 @@ contract Foreman {
     error BadStatus();
     error BadAmount();
     error BadSupplier();
+    error SupplierNotApproved();
     error CapExceeded();
     error Underfunded();
     error TooEarly();
@@ -110,6 +120,14 @@ contract Foreman {
         emit PolicySet(_agent, _monthlyCap, _autoApproveMax);
     }
 
+    /// @notice Vet a payee, or drop one. Only the plant may widen the set the
+    /// agent is allowed to pay.
+    function setSupplier(address supplier, bool approved) external onlyPlant {
+        if (supplier == address(0)) revert BadSupplier();
+        approvedSupplier[supplier] = approved;
+        emit SupplierSet(supplier, approved);
+    }
+
     /// @notice Budget left on the autonomous lane right now.
     function remainingBudget() public view returns (uint128) {
         if (block.timestamp >= windowStart + BUDGET_WINDOW) return monthlyCap;
@@ -124,7 +142,7 @@ contract Foreman {
         returns (uint256 id)
     {
         if (msg.sender != agent) revert NotAgent();
-        if (supplier == address(0)) revert BadSupplier();
+        if (!approvedSupplier[supplier]) revert SupplierNotApproved();
         if (amount == 0) revert BadAmount();
 
         id = _pos.length;

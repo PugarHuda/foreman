@@ -8,7 +8,15 @@
  * auto-approve line lands in a human queue instead of executing.
  */
 import { simulateBearing, estimateRUL } from "./machine.ts";
-import { MACHINES, PARTS, getMachine, getQuotes, getStock, avoidedDowntimeUsd } from "./plant.ts";
+import {
+  MACHINES,
+  PARTS,
+  PLANNING_HORIZON_HOURS,
+  getMachine,
+  getQuotes,
+  getStock,
+  avoidedDowntimeUsd,
+} from "./plant.ts";
 import { proposePO, getState } from "./chain.ts";
 
 const VENICE_URL = "https://api.venice.ai/api/v1/chat/completions";
@@ -139,6 +147,7 @@ async function dispatch(name: string, args: any, elapsedHours: number, steps: Ag
         iso_zone: health.zone,
         rul_hours: health.rulHours,
         trend_confidence_r2: health.r2,
+        planning_horizon_hours: PLANNING_HORIZON_HOURS,
         downtime_cost_per_hour_usd: machine.downtimeCostPerHour,
       };
     }
@@ -161,6 +170,24 @@ async function dispatch(name: string, args: any, elapsedHours: number, steps: Ag
       return { part_no: args.part_no, quotes };
     }
     case "create_purchase_order": {
+      // The contract rejects an unvetted payee anyway. Catching it here just
+      // gives the model something it can act on instead of a raw revert.
+      const known = getQuotes(args.part_no).map((q) => q.address.toLowerCase());
+      if (!known.includes(String(args.supplier_address).toLowerCase())) {
+        steps.push({
+          kind: "tool",
+          label: "create_purchase_order rejected",
+          detail: `${args.supplier_address} is not a vetted supplier for ${args.part_no}`,
+        });
+        return {
+          error: "supplier_address is not on the plant's approved list for this part",
+          approved_suppliers: getQuotes(args.part_no).map((q) => ({
+            supplier: q.supplier,
+            address: q.address,
+          })),
+        };
+      }
+
       const hash = await proposePO(
         args.machine_id,
         args.part_no,
@@ -205,10 +232,10 @@ Work through three separate decisions in order. Do not merge them.
 
 2. DO WE ORDER IT NOW? Only if both hold:
    - on-hand stock of that part is zero, and
-   - projected RUL is below the fastest available lead time plus a 24 hour safety margin.
-   If stock is on the shelf, or the RUL is comfortably beyond the lead time, do nothing and say why.
+   - projected RUL is inside planning_horizon_hours.
+   If the part is on the shelf, or the failure is beyond the horizon, do nothing and say why. Do not wait for the last possible moment: waiting never makes the part cheaper, and a lead time that slips costs a shift.
 
-3. WHICH SUPPLIER? Among suppliers whose lead time is shorter than the RUL, take the cheapest. If none can beat the RUL, take the fastest and say the part will land late.
+3. WHICH SUPPLIER? Among suppliers whose lead time is shorter than the RUL, take the cheapest. If none can beat the RUL, take the fastest and say plainly that the part will land late.
 
 Also:
 - Never trust a trend with r² below 0.7. Report it and take no action on that machine.

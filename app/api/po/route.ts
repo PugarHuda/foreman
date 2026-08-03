@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { approvePO, markShipped, confirmReceipt, cancelPO, txUrl } from "@/lib/chain.ts";
+import { denied } from "@/lib/guard.ts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -12,6 +13,9 @@ const ACTIONS = {
 } as const;
 
 export async function POST(req: Request) {
+  const no = denied(req);
+  if (no) return no;
+
   const { action, id } = await req.json();
   const run = ACTIONS[action as keyof typeof ACTIONS];
   if (!run) return NextResponse.json({ error: `unknown action ${action}` }, { status: 400 });

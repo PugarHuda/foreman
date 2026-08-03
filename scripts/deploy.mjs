@@ -94,6 +94,12 @@ await call(usdc, "approve", [foreman.address, TREASURY]);
 await call(foreman, "deposit", [TREASURY]);
 console.log(`  deposited ${Number(TREASURY) / 1e6} USDC`);
 
+console.log("\nvetting suppliers...");
+for (const [label, addr] of [["Sundara / A", supplierA], ["Precision / B", supplierB]]) {
+  await call(foreman, "setSupplier", [addr, true]);
+  console.log(`  ${label.padEnd(14)} ${addr}`);
+}
+
 console.log("\nfunding roles with gas...");
 for (const [label, to] of [["agent", agentAddr], ["supplierA", supplierA], ["supplierB", supplierB]]) {
   const have = await publicClient.getBalance({ address: to });

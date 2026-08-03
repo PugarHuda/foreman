@@ -63,6 +63,7 @@ approval queue.
 
 | Guarantee | How |
 |---|---|
+| Agent cannot invent a payee | `approvedSupplier` allowlist; only the plant may add to it. A hallucinated or injected address is rejected at the contract, not by a prompt |
 | Agent cannot overspend | `monthlyCap` per 30-day window, checked on every autonomous fund |
 | Agent cannot make large commitments alone | `autoApproveMax`; above it the PO sits in `Proposed` |
 | A human is never blocked by the agent's budget | `approvePO` bypasses the cap — the cap bounds the agent, not the plant |
@@ -127,6 +128,8 @@ Foreman
   ✔ returns escrow and budget when the plant cancels a funded PO
   ✔ refuses a cancelled PO a second time and blocks shipping it
   ✔ keeps outsiders out of the agent and plant lanes
+  ✔ will not pay an address the plant never vetted
+  ✔ lets only the plant vet a supplier
   ✔ will not commit more than the plant deposited
 bearing health
   ✔ maps RMS onto the ISO 10816-3 severity zones
@@ -153,6 +156,33 @@ severity bands are the real ones, and `lib/machine.ts` consumes a plain
 changes. Inventory and supplier quotes are a fixture standing in for a CMMS;
 the agent reaches them through the tool surface it would use against a real
 SAP PM instance. USDC is a mock ERC-20 on testnet.
+
+## Where the trust actually sits
+
+The interesting question about an agent that holds a wallet is not whether the
+model is clever. It is what happens when the model is wrong, or when someone
+feeds it text designed to make it wrong.
+
+Three answers, in descending order of how much they are worth:
+
+1. **The payee allowlist is in the contract.** Prompt injection, a
+   hallucinated address, a compromised inference provider — none of them
+   produce a payment to an attacker, because `proposePO` reverts on any
+   address the plant has not vetted. The model chooses among suppliers; the
+   plant decides who is choosable.
+2. **The budget and ceiling are in the contract.** Worst case inside the
+   allowlist is over-ordering from a real supplier, capped at $2,000 a month,
+   and every order above $500 stops for a human first.
+3. **The tool layer pre-checks the address** so a wrong guess comes back to
+   the model as a correctable error rather than a raw revert.
+
+What is *not* solved: `/api/agent` and `/api/po` sign with real keys and have
+no user authentication. On localhost that is correct — the only caller is the
+operator. On a public deployment it is not, so those routes refuse to serve
+unless `DEMO_SECRET` is set (`lib/guard.ts`). That shared secret is a speed
+bump against drive-by traffic, not authentication: it ships to the browser and
+anyone loading the page can read it. Production needs real sessions and the
+agent key in a KMS. Saying so plainly beats pretending otherwise.
 
 ## Next
 

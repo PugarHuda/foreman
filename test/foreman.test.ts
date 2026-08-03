@@ -30,6 +30,7 @@ async function deploy() {
   await token.write.mint([plant.account.address, DEPOSIT]);
   await token.write.approve([foreman.address, DEPOSIT], { account: plant.account });
   await foreman.write.deposit([DEPOSIT], { account: plant.account });
+  await foreman.write.setSupplier([supplier.account.address, true], { account: plant.account });
 
   return { plant, agent, supplier, outsider, token, foreman };
 }
@@ -197,6 +198,45 @@ describe("Foreman", () => {
       foreman.write.markShipped([0n], { account: outsider.account }),
       "NotSupplier",
     );
+  });
+
+  it("will not pay an address the plant never vetted", async () => {
+    const { plant, agent, supplier, outsider, foreman } = await deploy();
+
+    // The whole premise of an agent holding funds rests on this: even with a
+    // valid key and budget to spare, it cannot invent a payee.
+    await expectRevert(
+      foreman.write.proposePO([7, "6205-2RS", outsider.account.address, usdc(180)], {
+        account: agent.account,
+      }),
+      "SupplierNotApproved",
+    );
+
+    await foreman.write.setSupplier([outsider.account.address, true], { account: plant.account });
+    await foreman.write.proposePO([7, "6205-2RS", outsider.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    assert.equal((await foreman.read.getPO([0n])).status, Status.Funded);
+
+    // ...and the plant can withdraw that permission again.
+    await foreman.write.setSupplier([supplier.account.address, false], { account: plant.account });
+    await expectRevert(
+      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+        account: agent.account,
+      }),
+      "SupplierNotApproved",
+    );
+  });
+
+  it("lets only the plant vet a supplier", async () => {
+    const { agent, outsider, foreman } = await deploy();
+
+    for (const who of [agent, outsider]) {
+      await expectRevert(
+        foreman.write.setSupplier([outsider.account.address, true], { account: who.account }),
+        "NotPlant",
+      );
+    }
   });
 
   it("will not commit more than the plant deposited", async () => {

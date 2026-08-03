@@ -31,6 +31,14 @@ export interface Quote {
   leadTimeHours: number;
 }
 
+/**
+ * How far ahead maintenance buys. Not the same as "the last moment we could
+ * order": with zero stock and a confirmed trend, waiting never makes the part
+ * cheaper, and a lead time that slips costs a shift of production. Planners
+ * order inside the horizon and stop thinking about it.
+ */
+export const PLANNING_HORIZON_HOURS = 72;
+
 export const MACHINES: Machine[] = [
   {
     id: 7,
