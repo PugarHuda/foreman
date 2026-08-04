@@ -109,6 +109,14 @@ export default function Dashboard() {
     setData(await res.json());
   }, [hours, machineId]);
 
+  /* Public RPC reads lag a confirmed write by a few seconds. Reading once
+     straight after an action shows the old balance, which reads as a bug
+     rather than latency — so read again shortly after. */
+  const reload = useCallback(async () => {
+    await load();
+    setTimeout(load, 3000);
+  }, [load]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -128,7 +136,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(out.error);
       setSteps(out.steps);
       setSummary(out.summary);
-      await load();
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -147,7 +155,7 @@ export default function Dashboard() {
       });
       const out = await res.json();
       if (!res.ok) throw new Error(out.error);
-      await load();
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

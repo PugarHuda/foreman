@@ -3,7 +3,14 @@
  * whole point: the agent's key is separate from the plant's and is bounded
  * on-chain by the spend permission. Keys never leave the server.
  */
-import { createPublicClient, createWalletClient, http, type Abi, type Address } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseEventLogs,
+  type Abi,
+  type Address,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { FOREMAN_ADDRESS, FOREMAN_ABI, EXPLORER } from "./deployment.ts";
 import { activeChain, rpcUrl } from "./chains.ts";
@@ -56,8 +63,8 @@ async function send(role: Role, functionName: string, args: unknown[]) {
     account: wallet.account,
   });
   const hash = await wallet.writeContract(request);
-  await publicClient.waitForTransactionReceipt({ hash });
-  return hash;
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return { hash, receipt };
 }
 
 export interface PurchaseOrder {
@@ -121,12 +128,41 @@ export async function getState(): Promise<PlantState> {
   };
 }
 
-export const proposePO = (machineId: number, partNo: string, supplier: Address, amountUsd: number) =>
-  send("agent", "proposePO", [machineId, partNo, supplier, BigInt(Math.round(amountUsd * 1e6))]);
+/**
+ * Returns what the order became, decoded from the receipt we already waited
+ * for. Deliberately no follow-up read: an RPC hiccup after a successful
+ * write must never be reported as a failed order, or the agent will place it
+ * twice.
+ */
+export async function proposePO(
+  machineId: number,
+  partNo: string,
+  supplier: Address,
+  amountUsd: number,
+): Promise<{ hash: string; id: number; status: StatusName }> {
+  const { hash, receipt } = await send("agent", "proposePO", [
+    machineId,
+    partNo,
+    supplier,
+    BigInt(Math.round(amountUsd * 1e6)),
+  ]);
 
-export const approvePO = (id: number) => send("plant", "approvePO", [BigInt(id)]);
-export const confirmReceipt = (id: number) => send("plant", "confirmReceipt", [BigInt(id)]);
-export const cancelPO = (id: number) => send("plant", "cancelPO", [BigInt(id)]);
+  const events = parseEventLogs({ abi: foreman.abi, logs: receipt.logs });
+  const proposed = events.find((e) => (e as { eventName: string }).eventName === "Proposed");
+  const funded = events.find((e) => (e as { eventName: string }).eventName === "Funded");
+  if (!proposed) throw new Error(`no Proposed event in ${hash}`);
+
+  return {
+    hash,
+    id: Number((proposed as unknown as { args: { id: bigint } }).args.id),
+    status: funded ? "Funded" : "Proposed",
+  };
+}
+
+export const approvePO = (id: number) => send("plant", "approvePO", [BigInt(id)]).then((r) => r.hash);
+export const confirmReceipt = (id: number) =>
+  send("plant", "confirmReceipt", [BigInt(id)]).then((r) => r.hash);
+export const cancelPO = (id: number) => send("plant", "cancelPO", [BigInt(id)]).then((r) => r.hash);
 
 /** Ship as whichever supplier actually owns the PO. */
 export async function markShipped(id: number) {
@@ -134,5 +170,5 @@ export async function markShipped(id: number) {
   const po = pos.find((p) => p.id === id);
   if (!po) throw new Error(`no PO ${id}`);
   const role: Role = po.supplier.toLowerCase() === addressOf("supplierA").toLowerCase() ? "supplierA" : "supplierB";
-  return send(role, "markShipped", [BigInt(id)]);
+  return send(role, "markShipped", [BigInt(id)]).then((r) => r.hash);
 }

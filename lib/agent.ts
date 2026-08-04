@@ -17,7 +17,7 @@ import {
   getStock,
   avoidedDowntimeUsd,
 } from "./plant.ts";
-import { proposePO, getState } from "./chain.ts";
+import { proposePO } from "./chain.ts";
 
 const VENICE_URL = "https://api.venice.ai/api/v1/chat/completions";
 
@@ -188,14 +188,12 @@ async function dispatch(name: string, args: any, elapsedHours: number, steps: Ag
         };
       }
 
-      const hash = await proposePO(
+      const po = await proposePO(
         args.machine_id,
         args.part_no,
         args.supplier_address,
         args.amount_usd,
       );
-      const state = await getState();
-      const po = state.pos[state.pos.length - 1];
       steps.push({
         kind: "action",
         label:
@@ -203,12 +201,12 @@ async function dispatch(name: string, args: any, elapsedHours: number, steps: Ag
             ? `PO #${po.id} funded autonomously — $${args.amount_usd}`
             : `PO #${po.id} queued for human approval — $${args.amount_usd}`,
         detail: args.reason,
-        txHash: hash,
+        txHash: po.hash,
       });
       return {
         po_id: po.id,
         status: po.status,
-        tx_hash: hash,
+        tx_hash: po.hash,
         note:
           po.status === "Funded"
             ? "Escrow funded from the agent budget."
@@ -291,8 +289,18 @@ export async function runAgent(elapsedHours = DEFAULT_ELAPSED_HOURS): Promise<Ag
           steps,
         );
       } catch (e) {
-        result = { error: String(e instanceof Error ? e.message : e) };
-        steps.push({ kind: "tool", label: `${call.function.name} failed`, detail: String(e) });
+        const message = String(e instanceof Error ? e.message : e);
+        // A write that throws may still have landed — the failure could be in
+        // reading it back. Never invite a retry that double-spends.
+        result =
+          call.function.name === "create_purchase_order"
+            ? {
+                error: message,
+                retry: false,
+                note: "The transaction may already be on chain. Do not place this order again. Report the failure and stop.",
+              }
+            : { error: message };
+        steps.push({ kind: "tool", label: `${call.function.name} failed`, detail: message });
       }
       messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
     }

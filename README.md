@@ -13,6 +13,20 @@ lands in a human queue. The agent reasons; the contract constrains.
 
 ---
 
+## Live on Base Sepolia
+
+| | |
+|---|---|
+| Foreman | [`0x481fe34ed995603abdb9998b7ecc8811e2707d87`](https://sepolia.basescan.org/address/0x481fe34ed995603abdb9998b7ecc8811e2707d87) |
+| USDC (mock) | [`0xdea6da93265871d828b20cace2badd5f5e70209d`](https://sepolia.basescan.org/address/0xdea6da93265871d828b20cace2badd5f5e70209d) |
+
+A run you can check yourself:
+
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x4df8fc11475446e89743eaac560d2736834dce14fc2ee188a724609474752f7d) — under the ceiling, funded straight from the agent budget
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x8e0efc5e079c70655eead65b6f1ac18871b8e8259ab18113d61e8cdcae95d2f8) — proposed only; no funds move
+- [A human approves it](https://sepolia.basescan.org/tx/0xdecdaf91237ea57b724e2b98968990d5d48591124d6711576d66a2578a4b5e80) — and the agent's budget is untouched, because the cap bounds the agent, not the plant
+- [Supplier paid on confirmed receipt](https://sepolia.basescan.org/tx/0x87c901f3c5e1a773a20cf9680cc372610cd8c84e2df543a757e16a733797d13f)
+
 ## Why this is Industrial 5.0
 
 Industrial 4.0 put sensors on machines. It left a human to read the dashboard,
