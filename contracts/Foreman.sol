@@ -238,7 +238,15 @@ contract Foreman {
             refunded = po.amount;
             escrowed -= refunded;
             available += refunded;
-            if (po.agentFunded && spentInWindow >= refunded) spentInWindow -= refunded;
+
+            // Only give budget back if it was spent from the window that is
+            // still running. Cancelling an order funded under a previous
+            // window would otherwise hand the agent allowance it never used
+            // this window.
+            bool sameWindow = po.since >= windowStart;
+            if (po.agentFunded && sameWindow && spentInWindow >= refunded) {
+                spentInWindow -= refunded;
+            }
         }
         po.status = Status.Cancelled;
         po.since = uint40(block.timestamp);

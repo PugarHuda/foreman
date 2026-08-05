@@ -153,6 +153,36 @@ describe("Foreman", () => {
     assert.equal(await foreman.read.remainingBudget(), CAP, "cancelling must not burn budget");
   });
 
+  it("does not hand back budget from a window that has already rolled", async () => {
+    const { plant, agent, supplier, foreman } = await deploy();
+
+    // Spend most of the window, then let it roll over.
+    await foreman.write.proposePO([7, "OLD", supplier.account.address, AUTO], {
+      account: agent.account,
+    });
+    await networkHelpers.time.increase(31 * 24 * 60 * 60);
+    assert.equal(await foreman.read.remainingBudget(), CAP);
+
+    // Spend more in the fresh window than the old order was worth.
+    await foreman.write.proposePO([7, "NEW-A", supplier.account.address, AUTO], {
+      account: agent.account,
+    });
+    await foreman.write.proposePO([7, "NEW-B", supplier.account.address, AUTO], {
+      account: agent.account,
+    });
+    const spentThisWindow = await foreman.read.spentInWindow();
+    assert.equal(spentThisWindow, AUTO * 2n);
+
+    // Cancelling the stale order must not credit this window's budget.
+    await foreman.write.cancelPO([0n], { account: plant.account });
+    assert.equal(
+      await foreman.read.spentInWindow(),
+      spentThisWindow,
+      "budget from a previous window must not be refunded into this one",
+    );
+    assert.equal(await foreman.read.available(), DEPOSIT - AUTO * 2n, "escrow still comes back");
+  });
+
   it("refuses a cancelled PO a second time and blocks shipping it", async () => {
     const { plant, agent, supplier, foreman } = await deploy();
 

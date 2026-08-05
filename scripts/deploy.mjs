@@ -86,9 +86,28 @@ if (LOCAL && balance < parseEther("1")) {
 
 console.log(`chain   ${chain.name} (${chain.id})`);
 console.log(`plant   ${plant.address}  ${formatEther(balance)} ETH`);
-if (balance < parseEther("0.01")) {
+
+/**
+ * Ask for what this run actually needs, not a round number. Roles that are
+ * already funded cost nothing, and a flat 0.01 ETH floor blocks a deploy that
+ * would have gone through on 0.003.
+ */
+const roles = [
+  ["agent", agentAddr],
+  ["supplierA", supplierA],
+  ["supplierB", supplierB],
+];
+const needsGas = [];
+for (const [label, to] of roles) {
+  if ((await publicClient.getBalance({ address: to })) < GAS_PER_ROLE) needsGas.push([label, to]);
+}
+
+const DEPLOY_RESERVE = parseEther("0.0025"); // two contracts plus the seeding calls
+const required = DEPLOY_RESERVE + GAS_PER_ROLE * BigInt(needsGas.length);
+if (balance < required) {
   throw new Error(
-    `Not enough Base Sepolia ETH. Fund ${plant.address} at https://www.alchemy.com/faucets/base-sepolia`,
+    `Need about ${formatEther(required)} ETH (deploy plus gas for ${needsGas.length} unfunded role(s)), have ${formatEther(balance)}.\n` +
+      `Fund ${plant.address} at https://www.alchemy.com/faucets/base-sepolia`,
   );
 }
 
@@ -146,12 +165,8 @@ for (const [label, addr] of [["Sundara / A", supplierA], ["Precision / B", suppl
 }
 
 console.log("\nfunding roles with gas...");
-for (const [label, to] of [["agent", agentAddr], ["supplierA", supplierA], ["supplierB", supplierB]]) {
-  const have = await publicClient.getBalance({ address: to });
-  if (have >= GAS_PER_ROLE) {
-    console.log(`  ${label.padEnd(10)} already funded`);
-    continue;
-  }
+if (needsGas.length === 0) console.log("  all roles already funded");
+for (const [label, to] of needsGas) {
   await wait(await wallet.sendTransaction({ to, value: GAS_PER_ROLE }));
   console.log(`  ${label.padEnd(10)} ${formatEther(GAS_PER_ROLE)} ETH`);
 }

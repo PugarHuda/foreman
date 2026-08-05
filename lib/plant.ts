@@ -120,6 +120,35 @@ export function getStock(partNo: string): number {
   return INVENTORY[partNo] ?? 0;
 }
 
+/** An order still on its way to the plant. Cancelled and Released are done. */
+const OPEN_STATUSES = new Set(["Proposed", "Funded", "Shipped"]);
+
+/**
+ * How many of a part are already inbound. Stock on the shelf is only half the
+ * question: an agent that cannot see its own open orders re-buys the same
+ * bearing every time it runs.
+ */
+export function onOrderCount(
+  pos: readonly { partNo: string; status: string }[],
+  partNo: string,
+): number {
+  return pos.filter((p) => p.partNo === partNo && OPEN_STATUSES.has(p.status)).length;
+}
+
+/**
+ * On-hand stock, including deliveries that have already settled. A Released
+ * order means the part arrived and was paid for, so it belongs on the shelf —
+ * otherwise the store shows zero directly after a delivery and the agent goes
+ * and buys another one.
+ */
+export function stockOnHand(
+  pos: readonly { partNo: string; status: string }[],
+  partNo: string,
+): number {
+  const delivered = pos.filter((p) => p.partNo === partNo && p.status === "Released").length;
+  return getStock(partNo) + delivered;
+}
+
 /**
  * Downtime avoided if the part lands before the machine reaches Zone D.
  * Deliberately conservative: only the lead-time gap is counted as saved,

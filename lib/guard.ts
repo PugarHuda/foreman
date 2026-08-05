@@ -10,19 +10,20 @@
  * in a KMS, not an env var. Said plainly rather than dressed up.
  */
 export function denied(req: Request): Response | null {
-  const secret = process.env.DEMO_SECRET;
+  // Localhost is the operator's own machine. Requiring the header there only
+  // locks you out of your own demo — and you will be setting DEMO_SECRET on
+  // the same machine you deploy from.
+  if (process.env.NODE_ENV !== "production") return null;
 
+  const secret = process.env.DEMO_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      return Response.json(
-        {
-          error:
-            "DEMO_SECRET is not set. These endpoints move funds, so they stay closed on a public deployment. Set DEMO_SECRET (and NEXT_PUBLIC_DEMO_SECRET) to open them, or run the demo locally.",
-        },
-        { status: 503 },
-      );
-    }
-    return null; // local development
+    return Response.json(
+      {
+        error:
+          "DEMO_SECRET is not set. These endpoints move funds, so they stay closed on a public deployment. Set DEMO_SECRET (and NEXT_PUBLIC_DEMO_SECRET) to open them, or run the demo locally.",
+      },
+      { status: 503 },
+    );
   }
 
   return req.headers.get("x-demo-secret") === secret

@@ -81,6 +81,68 @@ test.describe("happy path — the control room reads correctly", () => {
   });
 });
 
+test.describe("reachable without a mouse", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".machine").first()).toBeVisible();
+  });
+
+  test("a machine can be selected from the keyboard", async ({ page }) => {
+    const press = page.locator(".machine", { hasText: "PRESS-02" });
+    await press.focus();
+    await expect(press).toBeFocused();
+
+    await page.keyboard.press("Enter");
+    await expect(press).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".panel", { hasText: "vibration trend" })).toContainText("PRESS-02");
+  });
+
+  test("focus is visible, not just present", async ({ page }) => {
+    const button = page.getByRole("button", { name: "Run agent" });
+    await button.focus();
+
+    const outline = await button.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { width: s.outlineWidth, style: s.outlineStyle };
+    });
+    expect(outline.style).not.toBe("none");
+    expect(parseFloat(outline.width)).toBeGreaterThan(0);
+  });
+
+  test("the run hour responds to arrow keys", async ({ page }) => {
+    const slider = page.locator('input[type="range"]');
+    await slider.focus();
+    const before = Number(await slider.inputValue());
+
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(async () => Number(await slider.inputValue())).toBeGreaterThan(before);
+  });
+
+  test("the trend chart describes itself to a screen reader", async ({ page }) => {
+    const label = await page.locator("svg[role=img]").getAttribute("aria-label");
+    expect(label).toMatch(/millimetres per second/);
+    expect(label).toMatch(/Zone D projected in/);
+  });
+
+  test("every control has an accessible name", async ({ page }) => {
+    // `||` not `??`: textContent is "" for an input, and "" is not nullish,
+    // so `??` never falls through to the wrapping label.
+    const unnamed = await page.evaluate(() =>
+      [...document.querySelectorAll("button, a[href], input")]
+        .filter(
+          (el) =>
+            !(
+              el.getAttribute("aria-label") ||
+              el.textContent?.trim() ||
+              el.closest("label")?.textContent?.trim()
+            ),
+        )
+        .map((el) => `${el.tagName}.${el.className}`),
+    );
+    expect(unnamed, `controls with no accessible name: ${unnamed.join(", ")}`).toEqual([]);
+  });
+});
+
 test.describe("wrong path — bad input is refused, not crashed on", () => {
   test("a nonsense machine id falls back instead of 500ing", async ({ request }) => {
     const res = await request.get("/api/state?hours=300&machine=999");

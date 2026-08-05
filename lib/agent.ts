@@ -15,8 +15,10 @@ import {
   getMachine,
   getQuotes,
   getStock,
+  onOrderCount,
+  stockOnHand,
 } from "./plant.ts";
-import { proposePO } from "./chain.ts";
+import { proposePO, getState } from "./chain.ts";
 
 const VENICE_URL = "https://api.venice.ai/api/v1/chat/completions";
 
@@ -55,7 +57,8 @@ const TOOLS = [
     type: "function",
     function: {
       name: "check_inventory",
-      description: "On-hand stock for a part number.",
+      description:
+        "Stock position for a part number: what is on the shelf, what is already on order, and the two combined as `covered`. A part on its way covers the machine as well as one in the store.",
       parameters: {
         type: "object",
         properties: { part_no: { type: "string" } },
@@ -151,13 +154,37 @@ async function dispatch(name: string, args: any, elapsedHours: number, steps: Ag
       };
     }
     case "check_inventory": {
-      const qty = getStock(args.part_no);
+      /* Stock on the shelf is only half the question. An MRP that ignores
+         what is already on order re-buys the same part every time it runs —
+         which is exactly what this agent did until it could see this. */
+      let onHand = getStock(args.part_no);
+      let onOrder = 0;
+      let orderBookRead = true;
+      try {
+        const { pos } = await getState();
+        onHand = stockOnHand(pos, args.part_no);
+        onOrder = onOrderCount(pos, args.part_no);
+      } catch {
+        orderBookRead = false;
+      }
+
       steps.push({
         kind: "tool",
         label: `check_inventory(${args.part_no})`,
-        detail: `${qty} on hand — ${PARTS[args.part_no] ?? "unknown part"}`,
+        detail: `${onHand} on hand, ${orderBookRead ? onOrder : "?"} already on order — ${
+          PARTS[args.part_no] ?? "unknown part"
+        }`,
       });
-      return { part_no: args.part_no, on_hand: qty };
+
+      return {
+        part_no: args.part_no,
+        on_hand: onHand,
+        on_order: orderBookRead ? onOrder : null,
+        covered: orderBookRead ? onHand + onOrder : null,
+        ...(orderBookRead
+          ? {}
+          : { warning: "Could not read the order book. Do not order — you cannot tell if one is already in flight." }),
+      };
     }
     case "get_supplier_quotes": {
       const quotes = getQuotes(args.part_no);
@@ -228,9 +255,9 @@ Work through three separate decisions in order. Do not merge them.
    Zone C or D: the consumable is already too late — a spalling bearing has scored the shaft — so the remedy is escalation_part.
 
 2. DO WE ORDER IT NOW? Only if both hold:
-   - on-hand stock of that part is zero, and
+   - "covered" is zero — that is on-hand stock plus anything already on order, and
    - projected RUL is inside planning_horizon_hours.
-   If the part is on the shelf, or the failure is beyond the horizon, do nothing and say why. Do not wait for the last possible moment: waiting never makes the part cheaper, and a lead time that slips costs a shift.
+   A part already on its way covers the machine just as well as one on the shelf. If "covered" is above zero, say so and order nothing. If the failure is beyond the horizon, say so and order nothing. Otherwise do not wait for the last possible moment: waiting never makes the part cheaper, and a lead time that slips costs a shift.
 
 3. WHICH SUPPLIER? Among suppliers whose lead time is shorter than the RUL, take the cheapest. If none can beat the RUL, take the fastest and say plainly that the part will land late.
 

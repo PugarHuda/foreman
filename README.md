@@ -31,18 +31,18 @@ to show than to argue.
 
 | | |
 |---|---|
-| Foreman | [`0x0954e50cbc85836c9e3fc6868d24b6118d974e9d`](https://sepolia.basescan.org/address/0x0954e50cbc85836c9e3fc6868d24b6118d974e9d) |
-| USDC (mock) | [`0xbcae987e3387f74867e56c6ddea1bc94af7932b5`](https://sepolia.basescan.org/address/0xbcae987e3387f74867e56c6ddea1bc94af7932b5) |
+| Foreman | [`0x6b99b00bd52bc134d5658745e64df1938592e468`](https://sepolia.basescan.org/address/0x6b99b00bd52bc134d5658745e64df1938592e468) |
+| USDC (mock) | [`0xa209ce6a8d0bb6ca8e48aa7ecc874856c1eb96bd`](https://sepolia.basescan.org/address/0xa209ce6a8d0bb6ca8e48aa7ecc874856c1eb96bd) |
 
 **[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
 straight off the running app by `scripts/record-demo.mjs`.
 
 Those four transactions, which you can check yourself:
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xc0d4b2fea67b3e71a230f38fb876bd67e3bac79bfd53a4aca9257e0c96866d98) — proposed and escrow-funded in one transaction, because it is under the ceiling
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x6753c5444916589a653d95748408c31c9983f6ed4d1cd82b77cefd027de50c84) — proposed only. No `Funded` event, no money moved
-- [A human approves it](https://sepolia.basescan.org/tx/0xd5e10822bde2e99945d33c957767186ad6517104d883c29c82e2fd04786965a8) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
-- [Supplier paid on confirmed receipt](https://sepolia.basescan.org/tx/0x844f85abfc988a04f5758901358ea7c6aa453d4e88278a44b2ad2bb6f5ddffac)
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x9e047592d7177b0f16b6eac79c43b6940e17ca91e2819d181cf5760f011262cc) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x0fb8e73fe039d1898ca1b05098c08cb2593e2e1ea9e7e3adc71134b44abaeda0) — `Proposed` only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0xed5756bdba0206ae9f0b3b2ad7591fcb460a350092d9d85e670f97476fe4997e) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier paid on confirmed receipt](https://sepolia.basescan.org/tx/0x18d352b111595cb6a28eca28cbe6b0fa1c5072154b27d35c2cb946e7b4ef0623)
 
 The split across two transactions is the whole argument. One key can commit
 routine money; the other is required for anything that is not routine.
@@ -98,6 +98,7 @@ approval queue.
 | Guarantee | How |
 |---|---|
 | Agent cannot invent a payee | `approvedSupplier` allowlist; only the plant may add to it. A hallucinated or injected address is rejected at the contract, not by a prompt |
+| Agent cannot re-buy what is already coming | `check_inventory` reports on-hand **plus on order**; the agent orders only when both are zero. Without this it re-bought the same bearing on every run |
 | Agent cannot overspend | `monthlyCap` per 30-day window, checked on every autonomous fund |
 | Agent cannot make large commitments alone | `autoApproveMax`; above it the PO sits in `Proposed` |
 | A human is never blocked by the agent's budget | `approvePO` bypasses the cap — the cap bounds the agent, not the plant |
@@ -168,8 +169,8 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 17 contract + unit tests, in-process EVM, no node needed
-npm run test:e2e  # 15 browser tests against a running dev server
+npm test          # 25 contract + unit tests, in-process EVM, no node needed
+npm run test:e2e  # 20 browser tests, against localhost or a deployed instance
 ```
 
 The e2e suite deliberately does not call the agent: that costs money, takes
@@ -193,6 +194,10 @@ wrong path — bad input is refused, not crashed on
 That suite earned its keep immediately: it caught `id: null` being coerced to
 `0` by `Number()`, so a request with no order id would have quietly acted on
 order #0.
+
+There is also a keyboard and screen-reader pass — machine selection, focus
+visibility, the run-hour slider, the chart's own description, and a check that
+no control ships without an accessible name.
 
 ```
 Foreman
