@@ -1,6 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+/** Models reach for markdown even when told not to. Strip it rather than
+    render literal asterisks at a judge. */
+function plain(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
+}
 
 /* Band widths are the ISO 10816-3 Class II boundaries laid out proportionally.
    The same scale drives the rail on each machine card and the y-axis of the
@@ -91,6 +101,7 @@ interface State {
   machines: Machine[];
   series: Sample[];
   quotes: { supplier: string; priceUsd: number; leadTimeHours: number }[];
+  avoidedUsd: number;
   chain: Chain | null;
   chainError: string | null;
 }
@@ -103,6 +114,14 @@ export default function Dashboard() {
   const [summary, setSummary] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+
+  /* The order actually being placed is the last step, and it is the one worth
+     watching. Keep it in view instead of letting it scroll out of the box. */
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [steps]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/state?hours=${hours}&machine=${machineId}`, { cache: "no-store" });
@@ -219,6 +238,11 @@ export default function Dashboard() {
           <div className="value">{money(chain?.autoApproveMaxUsd ?? 0)}</div>
           <div className="sub">above this, a human approves</div>
         </div>
+        <div>
+          <div className="eyebrow">Downtime bought back</div>
+          <div className="value">{money(data?.avoidedUsd ?? 0)}</div>
+          <div className="sub">from orders now in flight</div>
+        </div>
       </section>
 
       <div className="columns">
@@ -268,6 +292,38 @@ export default function Dashboard() {
               <Trend samples={data?.series ?? []} rulHours={selected?.rulHours ?? null} />
             </div>
           </section>
+
+          <section className="panel">
+            <header>
+              <h2 style={{ fontSize: 13 }}>Approved suppliers for {selected?.criticalPart}</h2>
+              <span className="eyebrow">vetted on chain</span>
+            </header>
+            <div className="body">
+              {(data?.quotes.length ?? 0) === 0 && (
+                <p className="empty">No vetted supplier carries this part.</p>
+              )}
+              {data?.quotes.map((q) => (
+                <div className="po" key={q.supplier}>
+                  <div className="line">
+                    <span className="part">{q.supplier}</span>
+                    <span className="amount">{money(q.priceUsd)}</span>
+                  </div>
+                  <div className="line">
+                    <span className="meta">{q.leadTimeHours} h lead time</span>
+                    <span className="meta">
+                      {selected?.rulHours != null && q.leadTimeHours < selected.rulHours
+                        ? "arrives before failure"
+                        : "arrives late"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <p className="empty" style={{ borderTop: "1px solid var(--rule)", paddingTop: 10, marginTop: 4 }}>
+                The agent may choose among these. It cannot pay anyone else — the
+                contract rejects any address the plant has not vetted.
+              </p>
+            </div>
+          </section>
         </div>
 
         <div className="stack">
@@ -285,7 +341,7 @@ export default function Dashboard() {
                   funds if the machine needs it.
                 </p>
               )}
-              <div className="log">
+              <div className="log" ref={logRef}>
                 {steps.map((s, i) => (
                   <div key={i} className={`step ${s.kind}`}>
                     <span className="mark">
@@ -293,7 +349,7 @@ export default function Dashboard() {
                     </span>
                     <div>
                       <div className="label">{s.label}</div>
-                      {s.detail && <div className="detail">{s.detail}</div>}
+                      {s.detail && <div className="detail">{plain(s.detail)}</div>}
                       {s.txHash && (
                         <a
                           className="detail"
@@ -311,7 +367,7 @@ export default function Dashboard() {
               </div>
               {summary && (
                 <p className="detail" style={{ marginTop: 14, borderTop: "1px solid var(--rule)", paddingTop: 12 }}>
-                  {summary}
+                  {plain(summary)}
                 </p>
               )}
             </div>
@@ -438,14 +494,21 @@ function Trend({ samples, rulHours }: { samples: Sample[]; rulHours: number | nu
   if (samples.length < 2) return <p className="empty">No telemetry.</p>;
 
   const last = samples[samples.length - 1];
-  const xMax = last.hours + (rulHours ?? 0) * 1.25 + 10;
-  const x = (h: number) => (h / xMax) * W;
+
+  /* A trailing window, not the whole run. Plotting 300 flat hours squeezes the
+     fault growth — the only part anyone needs to see — into a sliver at the
+     right edge. */
+  const WINDOW_HOURS = 120;
+  const xMin = Math.max(samples[0].hours, last.hours - WINDOW_HOURS);
+  const xMax = last.hours + (rulHours ?? 24) * 1.25 + 5;
+  const x = (h: number) => ((h - xMin) / (xMax - xMin)) * W;
   const y = (rms: number) => H - (scalePos(rms) / 100) * H;
 
+  const visible = samples.filter((s) => s.hours >= xMin);
   // One point per ~3px is plenty; the rest is noise the eye cannot resolve.
-  const stride = Math.max(1, Math.floor(samples.length / 260));
-  const line = samples
-    .filter((_, i) => i % stride === 0 || i === samples.length - 1)
+  const stride = Math.max(1, Math.floor(visible.length / 260));
+  const line = visible
+    .filter((_, i) => i % stride === 0 || i === visible.length - 1)
     .map((s) => `${x(s.hours).toFixed(1)},${y(s.rms).toFixed(1)}`)
     .join(" ");
 
@@ -497,6 +560,10 @@ function Trend({ samples, rulHours }: { samples: Sample[]; rulHours: number | nu
           </text>
         </>
       )}
+
+      <text x={6} y={H - 6} fill="var(--dim)" fontSize={10} fontFamily="var(--font-mono)">
+        run hour {Math.round(xMin)} → {Math.round(last.hours)}
+      </text>
 
       <polyline points={line} fill="none" stroke="var(--ink)" strokeWidth={1.6} />
       <circle cx={x(last.hours)} cy={y(last.rms)} r={3.5} fill="var(--ink)" />

@@ -91,6 +91,10 @@ export interface PlantState {
 
 const usd = (v: bigint) => Number(v) / 1e6;
 
+export async function poCount(): Promise<number> {
+  return Number(await publicClient.readContract({ ...foreman, functionName: "poCount" }));
+}
+
 export async function getState(): Promise<PlantState> {
   const read = (functionName: string) =>
     publicClient.readContract({ ...foreman, functionName }) as Promise<never>;

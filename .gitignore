@@ -7,3 +7,9 @@ types/
 .next/
 out/
 *.log
+
+# test + tooling output
+test-results/
+playwright-report/
+.playwright-mcp/
+blob-report/

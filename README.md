@@ -11,6 +11,10 @@ signed weeks earlier, and releases to the supplier on confirmed receipt.
 Routine orders execute autonomously. Anything above the auto-approve ceiling
 lands in a human queue. The agent reasons; the contract constrains.
 
+![The Foreman control room: machine health on the ISO 10816-3 severity rail, the
+projected Zone D crossing, the agent's live reasoning, and the on-chain order
+queue](docs/dashboard.png)
+
 ---
 
 ## Live on Base Sepolia
@@ -94,6 +98,7 @@ npm test                  # 15 tests: escrow lifecycle, caps, access control, RU
 
 cp .env.example .env      # fill DEPLOYER_KEY and VENICE_API_KEY
 npm run keys              # burner keys for the agent and suppliers
+node scripts/venice-check.mjs   # confirm the model actually tool-calls
 npm run deploy            # Base Sepolia; writes lib/deployment.ts
 npm run dev
 ```
@@ -131,6 +136,33 @@ Approve it, ship the bearing, confirm receipt, and the supplier's USDC balance
 goes from 0 to 180.
 
 ## Tests
+
+```bash
+npm test          # 17 contract + unit tests, in-process EVM, no node needed
+npm run test:e2e  # 15 browser tests against a running dev server
+```
+
+The e2e suite deliberately does not call the agent: that costs money, takes
+~40s and depends on a model provider, none of which belongs in a suite you run
+on every change. It covers what the browser can break — rendering, the trend
+projection, machine selection, the run-hour scrub, phone width — and then
+spends most of its effort on the paths that matter more than the happy one:
+
+```
+wrong path — bad input is refused, not crashed on
+  ✔ a nonsense machine id falls back instead of 500ing
+  ✔ a non-numeric run hour falls back to the default
+  ✔ an out-of-range run hour is clamped
+  ✔ an unknown order action is rejected with the valid ones named
+  ✔ an order that does not exist is a 404
+  ✔ a malformed order id is a 400
+  ✔ acting on an order past that step is refused in plain language
+  ✔ the dashboard surfaces a refused action instead of failing silently
+```
+
+That suite earned its keep immediately: it caught `id: null` being coerced to
+`0` by `Number()`, so a request with no order id would have quietly acted on
+order #0.
 
 ```
 Foreman

@@ -1,14 +1,29 @@
 import { NextResponse } from "next/server";
 import { snapshot, series, DEFAULT_ELAPSED_HOURS } from "@/lib/agent.ts";
 import { getState } from "@/lib/chain.ts";
-import { getQuotes } from "@/lib/plant.ts";
+import { MACHINES, getQuotes, avoidedDowntimeUsd } from "@/lib/plant.ts";
 
 export const dynamic = "force-dynamic";
 
+/** Telemetry only exists over this window; anything outside it is a typo. */
+const MIN_HOURS = 1;
+const MAX_HOURS = 400;
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const hours = Number(url.searchParams.get("hours") ?? DEFAULT_ELAPSED_HOURS);
-  const machineId = Number(url.searchParams.get("machine") ?? 7);
+
+  // A bad query string must never take the dashboard down — fall back to
+  // something sane and keep serving.
+  const rawHours = Number(url.searchParams.get("hours"));
+  const hours = Number.isFinite(rawHours)
+    ? Math.min(Math.max(rawHours, MIN_HOURS), MAX_HOURS)
+    : DEFAULT_ELAPSED_HOURS;
+
+  const rawMachine = Number(url.searchParams.get("machine"));
+  const machineId = MACHINES.some((m) => m.id === rawMachine) ? rawMachine : MACHINES[0].id;
+
+  const machines = snapshot(hours);
+  const selected = machines.find((m) => m.id === machineId);
 
   // The plant view works even before the contracts are deployed, so a missing
   // deployment shows up as one clear banner rather than an empty page.
@@ -23,10 +38,45 @@ export async function GET(req: Request) {
   return NextResponse.json({
     hours,
     machineId,
-    machines: snapshot(hours),
+    machines,
     series: series(machineId, hours),
-    quotes: getQuotes(snapshot(hours).find((m) => m.id === machineId)?.criticalPart ?? ""),
+    quotes: getQuotes(selected?.criticalPart ?? ""),
+    avoidedUsd: avoidedUsd(chain?.pos ?? [], machines),
     chain,
     chainError,
   });
+}
+
+/**
+ * What the committed orders are worth: for every order that is actually in
+ * flight, the downtime it buys back. Conservative by construction — see
+ * avoidedDowntimeUsd, which counts at most one shift of exposure rather than
+ * the whole projected outage.
+ */
+function avoidedUsd(
+  pos: { status: string; machineId: number; partNo: string; supplier: string }[],
+  machines: { id: number; rulHours: number | null }[],
+): number {
+  const inFlight = new Set(["Funded", "Shipped", "Released"]);
+
+  // Per machine, not per order. One asset's downtime can only be bought back
+  // once — two orders against the same machine do not save it twice, so take
+  // the best single order rather than summing them.
+  const bestPerMachine = new Map<number, number>();
+
+  for (const po of pos) {
+    if (!inFlight.has(po.status)) continue;
+
+    const machine = MACHINES.find((m) => m.id === po.machineId);
+    const health = machines.find((m) => m.id === po.machineId);
+    const quote = getQuotes(po.partNo).find(
+      (q) => q.address.toLowerCase() === po.supplier.toLowerCase(),
+    );
+    if (!machine || !quote || health?.rulHours == null) continue;
+
+    const saved = avoidedDowntimeUsd(machine, health.rulHours, quote.leadTimeHours);
+    bestPerMachine.set(machine.id, Math.max(bestPerMachine.get(machine.id) ?? 0, saved));
+  }
+
+  return [...bestPerMachine.values()].reduce((a, b) => a + b, 0);
 }

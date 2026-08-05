@@ -15,7 +15,6 @@ import {
   getMachine,
   getQuotes,
   getStock,
-  avoidedDowntimeUsd,
 } from "./plant.ts";
 import { proposePO } from "./chain.ts";
 
@@ -238,7 +237,8 @@ Work through three separate decisions in order. Do not merge them.
 Also:
 - Never trust a trend with r² below 0.7. Report it and take no action on that machine.
 - You are bounded on-chain by a monthly budget and a per-order auto-approve ceiling. Do not check them — the contract enforces them. An order above the ceiling landing in a human queue is the design working, not a failure. Place the correct order and let the contract route it.
-- Be terse and use plain sentences. A technician reads this between machine cycles. No tables.
+- Be terse and use plain sentences. A technician reads this between machine cycles. No tables, no markdown, no asterisks or headings — this is rendered as plain text on a shop-floor panel.
+- Keep the closing summary to two sentences. One machine per sentence at most.
 
 Finish with a two-sentence summary: what you found, and what you did about it.`;
 
@@ -270,11 +270,14 @@ export async function runAgent(elapsedHours = DEFAULT_ELAPSED_HOURS): Promise<Ag
     if (!msg) throw new Error("Venice returned no message");
     messages.push(msg);
 
-    if (msg.content?.trim()) {
+    const calls = msg.tool_calls ?? [];
+
+    // The final message is the summary and is returned separately — pushing it
+    // as a step too would print it twice on the panel.
+    if (msg.content?.trim() && calls.length > 0) {
       steps.push({ kind: "thought", label: "agent", detail: msg.content.trim() });
     }
 
-    const calls = msg.tool_calls ?? [];
     if (calls.length === 0) {
       return { steps, summary: msg.content?.trim() || "No action taken." };
     }
@@ -309,9 +312,3 @@ export async function runAgent(elapsedHours = DEFAULT_ELAPSED_HOURS): Promise<Ag
   return { steps, summary: "Agent hit the turn limit without concluding." };
 }
 
-/** Headline number for the dashboard: what the early order is worth. */
-export function savingsUsd(machineId: number, leadTimeHours: number, elapsedHours = DEFAULT_ELAPSED_HOURS) {
-  const { machine, health } = healthOf(machineId, elapsedHours);
-  if (health.rulHours === null) return 0;
-  return avoidedDowntimeUsd(machine, health.rulHours, leadTimeHours);
-}
