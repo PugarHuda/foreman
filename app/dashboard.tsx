@@ -123,6 +123,8 @@ export default function Dashboard() {
   const [summary, setSummary] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Kept apart from action errors so neither wipes the other off screen. */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   /* The order actually being placed is the last step, and it is the one worth
@@ -132,9 +134,30 @@ export default function Dashboard() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [steps]);
 
+  /**
+   * A dashboard of zeros is the worst way to fail: it reads as a plant with
+   * no money rather than a page that could not load. Any failure here has to
+   * say so out loud.
+   */
   const load = useCallback(async () => {
-    const res = await fetch(`/api/state?hours=${hours}&machine=${machineId}`, { cache: "no-store" });
-    setData(await res.json());
+    try {
+      const res = await fetch(`/api/state?hours=${hours}&machine=${machineId}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`the plant view returned HTTP ${res.status}`);
+
+      const json = await res.json().catch(() => {
+        throw new Error("the plant view returned something unreadable");
+      });
+      if (!Array.isArray(json.machines)) throw new Error("the plant view is missing its machines");
+
+      setData(json);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(
+        `Cannot read the line — ${e instanceof Error ? e.message : String(e)}. The figures below are not live.`,
+      );
+    }
   }, [hours, machineId]);
 
   /* Public RPC reads lag a confirmed write by a few seconds. Reading once
@@ -217,6 +240,7 @@ export default function Dashboard() {
         </label>
       </header>
 
+      {loadError && <p className="error">{loadError}</p>}
       {data?.chainError && (
         <p className="error">
           Contracts not reachable — run <code>node scripts/deploy.mjs</code> first.
@@ -225,6 +249,7 @@ export default function Dashboard() {
         </p>
       )}
       {error && <p className="error">{error}</p>}
+      {!data && !loadError && <p className="empty">Reading the line…</p>}
 
       <section className="strip">
         <div>
@@ -548,7 +573,10 @@ function Trend({ samples, rulHours }: { samples: Sample[]; rulHours: number | nu
   });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img"
+    /* No fixed height: the viewBox scales to the container width, and pinning
+       240px on a phone left the plot squeezed into a third of a mostly empty
+       box. */
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto" }} role="img"
       aria-label={`Vibration trend. Now ${last.rms.toFixed(2)} millimetres per second.${
         rulHours !== null ? ` Zone D projected in ${rulHours} hours.` : ""
       }`}>

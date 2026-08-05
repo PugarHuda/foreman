@@ -78,6 +78,12 @@ test.describe("happy path — the control room reads correctly", () => {
       () => document.documentElement.scrollWidth > window.innerWidth + 1,
     );
     expect(overflows, "the page must not scroll sideways on a phone").toBe(false);
+
+    // The chart must fill its box rather than sit in a band of dead space.
+    const svg = page.locator("svg[role=img]");
+    const box = (await svg.boundingBox())!;
+    const ratio = box.width / box.height;
+    expect(ratio, "chart should keep its aspect ratio, not letterbox").toBeCloseTo(820 / 240, 0);
   });
 });
 
@@ -143,6 +149,85 @@ test.describe("reachable without a mouse", () => {
   });
 });
 
+test.describe("wrong path — a broken backend says so", () => {
+  test("a malformed state response is reported, not swallowed", async ({ page }) => {
+    await page.route("**/api/state**", (route) =>
+      route.fulfill({ status: 200, contentType: "text/html", body: "<html>gateway error</html>" }),
+    );
+    await page.goto("/");
+
+    // The failure mode to avoid is a dashboard of zeros that looks like a
+    // working plant with no money.
+    await expect(page.locator(".error")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("a failing state endpoint is reported", async ({ page }) => {
+    await page.route("**/api/state**", (route) =>
+      route.fulfill({ status: 502, contentType: "application/json", body: '{"error":"upstream"}' }),
+    );
+    await page.goto("/");
+    await expect(page.locator(".error")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("an agent failure surfaces the reason", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".machine").first()).toBeVisible();
+
+    await page.route("**/api/agent", (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Venice 401: invalid api key" }),
+      }),
+    );
+    await page.getByRole("button", { name: "Run agent" }).click();
+
+    await expect(page.locator(".error")).toContainText("invalid api key");
+    await expect(page.getByRole("button", { name: "Run agent" })).toBeEnabled();
+  });
+
+  test("a second agent run while one is in flight is explained", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".machine").first()).toBeVisible();
+
+    await page.route("**/api/agent", (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "The agent is already assessing this line." }),
+      }),
+    );
+    await page.getByRole("button", { name: "Run agent" }).click();
+    await expect(page.locator(".error")).toContainText("already assessing");
+  });
+
+  test("a render crash shows a recovery screen, not a blank page", async ({ page }) => {
+    // Passes the shape check, then breaks in render: a machine with no
+    // reading at all. This is what a mismatched deploy looks like.
+    await page.route("**/api/state**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          machines: [{ id: 7, tag: "CNC-07" }],
+          series: [],
+          quotes: [],
+          avoidedUsd: 0,
+          explorer: "",
+          chain: null,
+          chainError: null,
+        }),
+      }),
+    );
+    await page.goto("/");
+
+    await expect(page.getByText(/Something went wrong rendering the line/i)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  });
+});
+
 test.describe("wrong path — bad input is refused, not crashed on", () => {
   test("a nonsense machine id falls back instead of 500ing", async ({ request }) => {
     const res = await request.get("/api/state?hours=300&machine=999");
@@ -201,6 +286,37 @@ test.describe("wrong path — bad input is refused, not crashed on", () => {
   });
 
   test("the dashboard surfaces a refused action instead of failing silently", async ({ page }) => {
+    // Both endpoints are stubbed: this is about how the panel reacts to a
+    // refusal, and it should not depend on what happens to be on chain.
+    await page.route("**/api/state**", async (route) => {
+      const real = await route.fetch();
+      const body = await real.json();
+      body.chain = {
+        foreman: "0x0000000000000000000000000000000000000001",
+        agent: "0x0000000000000000000000000000000000000002",
+        availableUsd: 50000,
+        escrowedUsd: 180,
+        monthlyCapUsd: 2000,
+        autoApproveMaxUsd: 500,
+        remainingBudgetUsd: 1820,
+        pos: [
+          {
+            id: 0,
+            supplier: "0x0000000000000000000000000000000000000003",
+            since: 0,
+            status: "Funded",
+            agentFunded: true,
+            machineId: 7,
+            amountUsd: 180,
+            partNo: "6205-2RS",
+            waybill: null,
+          },
+        ],
+      };
+      body.chainError = null;
+      await route.fulfill({ json: body });
+    });
+
     await page.route("**/api/po", (route) =>
       route.fulfill({
         status: 409,
@@ -208,15 +324,13 @@ test.describe("wrong path — bad input is refused, not crashed on", () => {
         body: JSON.stringify({ error: "That order has already moved past this step." }),
       }),
     );
-    await page.goto("/");
-    // Orders arrive from an async fetch; looking before they land skips the
-    // test for the wrong reason.
-    await expect(page.locator(".po").first()).toBeVisible({ timeout: 15_000 });
 
-    const button = page.getByRole("button", { name: /Confirm receipt|Approve \$/ }).first();
-    await expect(button, "expected an actionable order on chain").toBeVisible({ timeout: 15_000 });
+    await page.goto("/");
+    const button = page.getByRole("button", { name: "Confirm receipt & pay" }).first();
+    await expect(button).toBeVisible({ timeout: 15_000 });
 
     await button.click();
     await expect(page.locator(".error")).toContainText("already moved past this step");
+    await expect(button, "the control must come back, not stay stuck").toBeEnabled();
   });
 });
