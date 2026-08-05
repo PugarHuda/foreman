@@ -75,6 +75,7 @@ interface PO {
   machineId: number;
   amountUsd: number;
   partNo: string;
+  waybill: string | null;
 }
 
 interface Chain {
@@ -107,9 +108,16 @@ interface State {
   chainError: string | null;
 }
 
+/** So a demo can be linked at the interesting moment, not just described. */
+function fromUrl(key: string, fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  const v = Number(new URLSearchParams(window.location.search).get(key));
+  return Number.isFinite(v) && v !== 0 ? v : fallback;
+}
+
 export default function Dashboard() {
-  const [hours, setHours] = useState(300);
-  const [machineId, setMachineId] = useState(7);
+  const [hours, setHours] = useState(() => fromUrl("hours", 300));
+  const [machineId, setMachineId] = useState(() => fromUrl("machine", 7));
   const [data, setData] = useState<State | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [summary, setSummary] = useState("");
@@ -445,6 +453,11 @@ export default function Dashboard() {
                     </span>
                     <span className="badge">{po.status}</span>
                   </div>
+                  {po.waybill && (
+                    <div className="meta">
+                      waybill {po.waybill} — committed on despatch, checked on arrival
+                    </div>
+                  )}
                   <div className="actions">
                     {po.status === "Funded" && (
                       <button

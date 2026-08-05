@@ -120,6 +120,17 @@ export function getStock(partNo: string): number {
   return INVENTORY[partNo] ?? 0;
 }
 
+/**
+ * The despatch document reference for an order.
+ *
+ * In a real deployment this comes off the carrier's waybill and travels with
+ * the goods — the supplier commits its hash on despatch, and goods-in reads
+ * the paper and submits the same reference. Derived from the order id here so
+ * the demo carries no hidden state and survives a page reload; swapping in a
+ * carrier API changes this one function.
+ */
+export const waybillFor = (poId: number) => `WB-${String(poId).padStart(6, "0")}`;
+
 /** An order still on its way to the plant. Cancelled and Released are done. */
 const OPEN_STATUSES = new Set(["Proposed", "Funded", "Shipped"]);
 

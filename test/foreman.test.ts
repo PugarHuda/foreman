@@ -9,6 +9,11 @@ const CAP = usdc(2_000); // agent may commit this much per 30d window
 const AUTO = usdc(500); // per-PO autonomous ceiling
 const DEPOSIT = usdc(50_000);
 
+/** Stand-in for the hash of a carrier's waybill. */
+const REF = "0x" + "a1".repeat(32) as `0x${string}`;
+const OTHER_REF = "0x" + "b2".repeat(32) as `0x${string}`;
+const NO_REF = ("0x" + "00".repeat(32)) as `0x${string}`;
+
 const Status = {
   Proposed: 1,
   Funded: 2,
@@ -111,14 +116,51 @@ describe("Foreman", () => {
     await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
       account: agent.account,
     });
-    await foreman.write.markShipped([0n], { account: supplier.account });
+    await foreman.write.markShipped([0n, REF], { account: supplier.account });
     assert.equal((await foreman.read.getPO([0n])).status, Status.Shipped);
 
-    await foreman.write.confirmReceipt([0n], { account: plant.account });
+    await foreman.write.confirmReceipt([0n, REF], { account: plant.account });
 
     assert.equal(await token.read.balanceOf([supplier.account.address]), usdc(180));
     assert.equal(await foreman.read.escrowed(), 0n);
     assert.equal((await foreman.read.getPO([0n])).status, Status.Released);
+  });
+
+  it("will not release escrow against a document nobody committed to", async () => {
+    const { plant, agent, supplier, foreman } = await deploy();
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+
+    // A despatch has to reference something.
+    await expectRevert(
+      foreman.write.markShipped([0n, NO_REF], { account: supplier.account }),
+      "NoDeliveryRef",
+    );
+
+    await foreman.write.markShipped([0n, REF], { account: supplier.account });
+    assert.equal((await foreman.read.getPO([0n])).deliveryRef, REF, "the reference is on chain");
+
+    // Goods-in reading a different document must not free the money.
+    await expectRevert(
+      foreman.write.confirmReceipt([0n, OTHER_REF], { account: plant.account }),
+      "DeliveryRefMismatch",
+    );
+
+    await foreman.write.confirmReceipt([0n, REF], { account: plant.account });
+    assert.equal((await foreman.read.getPO([0n])).status, Status.Released);
+  });
+
+  it("still lets the plant settle an order the supplier never marked despatched", async () => {
+    const { plant, agent, supplier, token, foreman } = await deploy();
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    // Parts turned up without paperwork; the plant's own money, the plant's call.
+    await foreman.write.confirmReceipt([0n, NO_REF], { account: plant.account });
+    assert.equal(await token.read.balanceOf([supplier.account.address]), usdc(180));
   });
 
   it("lets a shipped supplier collect after the receipt timeout, but not before", async () => {
@@ -127,7 +169,7 @@ describe("Foreman", () => {
     await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
       account: agent.account,
     });
-    await foreman.write.markShipped([0n], { account: supplier.account });
+    await foreman.write.markShipped([0n, REF], { account: supplier.account });
 
     await expectRevert(
       foreman.write.claimAfterTimeout([0n], { account: supplier.account }),
@@ -193,7 +235,7 @@ describe("Foreman", () => {
 
     await expectRevert(foreman.write.cancelPO([0n], { account: plant.account }), "BadStatus");
     await expectRevert(
-      foreman.write.markShipped([0n], { account: supplier.account }),
+      foreman.write.markShipped([0n, REF], { account: supplier.account }),
       "BadStatus",
     );
   });
@@ -225,7 +267,7 @@ describe("Foreman", () => {
 
     await foreman.write.approvePO([0n], { account: plant.account });
     await expectRevert(
-      foreman.write.markShipped([0n], { account: outsider.account }),
+      foreman.write.markShipped([0n, REF], { account: outsider.account }),
       "NotSupplier",
     );
   });

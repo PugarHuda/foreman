@@ -7,10 +7,13 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  keccak256,
   parseEventLogs,
+  stringToHex,
   type Abi,
   type Address,
 } from "viem";
+import { waybillFor } from "./plant.ts";
 import { privateKeyToAccount } from "viem/accounts";
 import { FOREMAN_ADDRESS, FOREMAN_ABI, EXPLORER } from "./deployment.ts";
 import { activeChain, rpcUrl } from "./chains.ts";
@@ -50,6 +53,9 @@ export function addressOf(role: Role): Address {
 
 const foreman = { address: FOREMAN_ADDRESS as Address, abi: FOREMAN_ABI as unknown as Abi };
 
+/** What the supplier commits to on despatch and goods-in checks on arrival. */
+export const deliveryRefFor = (poId: number) => keccak256(stringToHex(waybillFor(poId)));
+
 export function txUrl(hash: string) {
   return `${EXPLORER}/tx/${hash}`;
 }
@@ -79,6 +85,8 @@ export interface PurchaseOrder {
   machineId: number;
   amountUsd: number;
   partNo: string;
+  /** Despatch document the supplier committed to, once they have shipped. */
+  waybill: string | null;
 }
 
 export interface PlantState {
@@ -121,6 +129,8 @@ export async function getState(): Promise<PlantState> {
     machineId: Number(p.machineId),
     amountUsd: usd(p.amount),
     partNo: p.partNo as string,
+    waybill:
+      p.deliveryRef && p.deliveryRef !== `0x${"0".repeat(64)}` ? waybillFor(id) : null,
   }));
 
   return {
@@ -167,15 +177,17 @@ export async function proposePO(
 }
 
 export const approvePO = (id: number) => send("plant", "approvePO", [BigInt(id)]).then((r) => r.hash);
-export const confirmReceipt = (id: number) =>
-  send("plant", "confirmReceipt", [BigInt(id)]).then((r) => r.hash);
 export const cancelPO = (id: number) => send("plant", "cancelPO", [BigInt(id)]).then((r) => r.hash);
 
-/** Ship as whichever supplier actually owns the PO. */
+/** Goods-in submits the reference it read off the document that arrived. */
+export const confirmReceipt = (id: number) =>
+  send("plant", "confirmReceipt", [BigInt(id), deliveryRefFor(id)]).then((r) => r.hash);
+
+/** Ship as whichever supplier actually owns the PO, committing to the waybill. */
 export async function markShipped(id: number) {
   const { pos } = await getState();
   const po = pos.find((p) => p.id === id);
   if (!po) throw new Error(`no PO ${id}`);
   const role: Role = po.supplier.toLowerCase() === addressOf("supplierA").toLowerCase() ? "supplierA" : "supplierB";
-  return send(role, "markShipped", [BigInt(id)]).then((r) => r.hash);
+  return send(role, "markShipped", [BigInt(id), deliveryRefFor(id)]).then((r) => r.hash);
 }

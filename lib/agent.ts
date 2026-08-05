@@ -25,6 +25,9 @@ const VENICE_URL = "https://api.venice.ai/api/v1/chat/completions";
 /** Hours of telemetry replayed. The demo advances this to walk the fault in. */
 export const DEFAULT_ELAPSED_HOURS = 300;
 
+/** A shift assessment that has not concluded in this many turns is stuck. */
+export const MAX_TURNS = 8;
+
 export interface AgentStep {
   kind: "thought" | "tool" | "action";
   label: string;
@@ -269,11 +272,34 @@ Also:
 
 Finish with a two-sentence summary: what you found, and what you did about it.`;
 
-export async function runAgent(elapsedHours = DEFAULT_ELAPSED_HOURS): Promise<AgentRun> {
+/** One round trip to the model. Swappable so the loop can be tested without one. */
+export type ChatFn = (messages: unknown[], tools: unknown) => Promise<any>;
+
+const veniceChat: ChatFn = async (messages, tools) => {
   const apiKey = process.env.VENICE_API_KEY;
   if (!apiKey) throw new Error("VENICE_API_KEY missing from .env");
-  const model = process.env.VENICE_MODEL || "claude-opus-5";
 
+  const res = await fetch(VENICE_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.VENICE_MODEL || "claude-opus-5",
+      messages,
+      tools,
+      temperature: 0.2,
+    }),
+  });
+  if (!res.ok) throw new Error(`Venice ${res.status}: ${await res.text()}`);
+
+  const msg = (await res.json()).choices?.[0]?.message;
+  if (!msg) throw new Error("Venice returned no message");
+  return msg;
+};
+
+export async function runAgent(
+  elapsedHours = DEFAULT_ELAPSED_HOURS,
+  chat: ChatFn = veniceChat,
+): Promise<AgentRun> {
   const steps: AgentStep[] = [];
   const messages: any[] = [
     { role: "system", content: SYSTEM },
@@ -285,16 +311,8 @@ export async function runAgent(elapsedHours = DEFAULT_ELAPSED_HOURS): Promise<Ag
     },
   ];
 
-  for (let turn = 0; turn < 8; turn++) {
-    const res = await fetch(VENICE_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, tools: TOOLS, temperature: 0.2 }),
-    });
-    if (!res.ok) throw new Error(`Venice ${res.status}: ${await res.text()}`);
-
-    const msg = (await res.json()).choices?.[0]?.message;
-    if (!msg) throw new Error("Venice returned no message");
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    const msg = await chat(messages, TOOLS);
     messages.push(msg);
 
     const calls = msg.tool_calls ?? [];

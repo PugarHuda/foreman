@@ -28,6 +28,15 @@ contract Foreman {
         bool agentFunded; // funded on the autonomous lane, so it consumed budget
         uint32 machineId;
         uint128 amount;
+        /**
+         * Hash of the supplier's despatch document — waybill, consignment
+         * note, whatever the carrier issues. Escrow does not move on a bare
+         * click: the supplier commits to a reference with their own key
+         * first, and the plant confirms against it. Feeding this from a
+         * carrier API or a goods-in scanner is an integration, not a
+         * redesign.
+         */
+        bytes32 deliveryRef;
         string partNo;
     }
 
@@ -65,7 +74,7 @@ contract Foreman {
     event Withdrawn(uint128 amount);
     event Proposed(uint256 indexed id, uint32 indexed machineId, address indexed supplier, uint128 amount, string partNo);
     event Funded(uint256 indexed id, uint128 amount, bool autonomous);
-    event Shipped(uint256 indexed id);
+    event Shipped(uint256 indexed id, bytes32 deliveryRef);
     event Released(uint256 indexed id, address indexed supplier, uint128 amount);
     event Cancelled(uint256 indexed id, uint128 refunded);
 
@@ -76,6 +85,8 @@ contract Foreman {
     error BadAmount();
     error BadSupplier();
     error SupplierNotApproved();
+    error NoDeliveryRef();
+    error DeliveryRefMismatch();
     error CapExceeded();
     error Underfunded();
     error TooEarly();
@@ -154,6 +165,7 @@ contract Foreman {
                 agentFunded: false,
                 machineId: machineId,
                 amount: amount,
+                deliveryRef: bytes32(0),
                 partNo: partNo
             })
         );
@@ -192,19 +204,35 @@ contract Foreman {
         emit Funded(id, po.amount, autonomous);
     }
 
-    function markShipped(uint256 id) external {
+    /// @notice Supplier despatches, committing to the document that proves it.
+    /// @param deliveryRef Hash of the waybill or consignment note.
+    function markShipped(uint256 id, bytes32 deliveryRef) external {
         PO storage po = _pos[id];
         if (msg.sender != po.supplier) revert NotSupplier();
         if (po.status != Status.Funded) revert BadStatus();
+        if (deliveryRef == bytes32(0)) revert NoDeliveryRef();
+
         po.status = Status.Shipped;
         po.since = uint40(block.timestamp);
-        emit Shipped(id);
+        po.deliveryRef = deliveryRef;
+        emit Shipped(id, deliveryRef);
     }
 
-    /// @notice Plant confirms the part arrived; escrow goes to the supplier.
-    function confirmReceipt(uint256 id) external onlyPlant {
+    /**
+     * @notice Plant books the goods in; escrow goes to the supplier.
+     * @param deliveryRef The reference read off the document that arrived with
+     * the parts. Once a supplier has despatched, this must match what they
+     * committed to — so funds are released against a checked document rather
+     * than a bare click. Ignored when the supplier never marked despatch and
+     * the plant is settling directly, which is the plant's own call.
+     */
+    function confirmReceipt(uint256 id, bytes32 deliveryRef) external onlyPlant {
         PO storage po = _pos[id];
-        if (po.status != Status.Funded && po.status != Status.Shipped) revert BadStatus();
+        if (po.status == Status.Shipped) {
+            if (deliveryRef != po.deliveryRef) revert DeliveryRefMismatch();
+        } else if (po.status != Status.Funded) {
+            revert BadStatus();
+        }
         _release(id, po);
     }
 

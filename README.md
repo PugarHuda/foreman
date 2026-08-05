@@ -31,18 +31,19 @@ to show than to argue.
 
 | | |
 |---|---|
-| Foreman | [`0x6b99b00bd52bc134d5658745e64df1938592e468`](https://sepolia.basescan.org/address/0x6b99b00bd52bc134d5658745e64df1938592e468) |
-| USDC (mock) | [`0xa209ce6a8d0bb6ca8e48aa7ecc874856c1eb96bd`](https://sepolia.basescan.org/address/0xa209ce6a8d0bb6ca8e48aa7ecc874856c1eb96bd) |
+| Foreman | [`0xd15bf5b95dc29083eba236057e2dc9de90092725`](https://sepolia.basescan.org/address/0xd15bf5b95dc29083eba236057e2dc9de90092725) |
+| USDC (mock) | [`0xa048d4f17282488b60d96e6fb01fbda106f38b8a`](https://sepolia.basescan.org/address/0xa048d4f17282488b60d96e6fb01fbda106f38b8a) |
 
 **[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
 straight off the running app by `scripts/record-demo.mjs`.
 
 Those four transactions, which you can check yourself:
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x9e047592d7177b0f16b6eac79c43b6940e17ca91e2819d181cf5760f011262cc) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x0fb8e73fe039d1898ca1b05098c08cb2593e2e1ea9e7e3adc71134b44abaeda0) — `Proposed` only. No `Funded` event, no money moved
-- [A human approves it](https://sepolia.basescan.org/tx/0xed5756bdba0206ae9f0b3b2ad7591fcb460a350092d9d85e670f97476fe4997e) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
-- [Supplier paid on confirmed receipt](https://sepolia.basescan.org/tx/0x18d352b111595cb6a28eca28cbe6b0fa1c5072154b27d35c2cb946e7b4ef0623)
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xbab9ce88d4df901a42b8baab9eeef2ef1f3f4e9d2c20ff8d499046dc84d41d0e) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x5c435e0281d209b5bf30ef81c2a15498136918f7ab4569faa0f6492a7dd57142) — `Proposed` only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0x4fda1a82940ecb0c058251350edd68bf8462a26702863ae4d7479d4e188da93a) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0x3be275ece2945f555e0dd3596fc14c04d5665b31d69d804307811aad098ff413) — the `Shipped` event carries the document hash
+- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0x784546759b521760d8f35e92a5287853dd67afd2bed0d695c9aa58f0c4a516a7)
 
 The split across two transactions is the whole argument. One key can commit
 routine money; the other is required for anything that is not routine.
@@ -102,6 +103,7 @@ approval queue.
 | Agent cannot overspend | `monthlyCap` per 30-day window, checked on every autonomous fund |
 | Agent cannot make large commitments alone | `autoApproveMax`; above it the PO sits in `Proposed` |
 | A human is never blocked by the agent's budget | `approvePO` bypasses the cap — the cap bounds the agent, not the plant |
+| Escrow does not move on a bare click | The supplier commits a despatch document hash with their own key; `confirmReceipt` reverts unless goods-in submits a reference that matches |
 | Supplier cannot be stiffed | `claimAfterTimeout` after 14 days from shipping |
 | Plant cannot be stiffed | escrow only releases on `confirmReceipt` or that timeout |
 | A cancelled order does not burn the month | `cancelPO` refunds budget and escrow |
@@ -169,9 +171,14 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 25 contract + unit tests, in-process EVM, no node needed
+npm test          # 35 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 20 browser tests, against localhost or a deployed instance
 ```
+
+The agent loop is tested too, with the model replaced by a script: that it
+feeds tool results back, stops when the model stops asking, surfaces a failed
+tool call instead of throwing, tells the model not to retry a write that may
+already be on chain, and gives up at the turn limit rather than spinning.
 
 The e2e suite deliberately does not call the agent: that costs money, takes
 ~40s and depends on a model provider, none of which belongs in a suite you run
@@ -229,6 +236,12 @@ Stated plainly, because a demo that hides its seams is not worth piloting.
 Sepolia with real transactions. The RUL trending — log-linear extrapolation to
 a standards-defined threshold is how condition monitoring actually does it.
 The ISO 10816-3 Class II severity bands. The agent's reasoning and tool calls.
+
+**Real:** the delivery control. The supplier signs a commitment to a document
+reference before the plant can release anything, and a mismatched reference
+reverts. What is staged is only where the reference comes from — it is derived
+from the order id so the demo holds no hidden state. Point `waybillFor` at a
+carrier API or a goods-in scanner and the contract is unchanged.
 
 **Staged:** the vibration signal is a seeded replay, not a live accelerometer.
 Its shape (flat baseline, exponential growth after fault onset) and its
