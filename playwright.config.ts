@@ -1,4 +1,13 @@
+import fs from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
+
+/* A deployed instance refuses the write endpoints without this header (see
+   lib/guard.ts). Local dev does not need it and ignores it. */
+const demoSecret =
+  process.env.DEMO_SECRET ??
+  (fs.existsSync(".env")
+    ? fs.readFileSync(".env", "utf8").match(/^DEMO_SECRET=(.+)$/m)?.[1]?.trim()
+    : undefined);
 
 /**
  * The e2e suite runs against a dev server on an already-deployed contract.
@@ -16,6 +25,7 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
     trace: "retain-on-failure",
+    extraHTTPHeaders: demoSecret ? { "x-demo-secret": demoSecret } : {},
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: process.env.E2E_BASE_URL

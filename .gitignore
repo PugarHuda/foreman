@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.*.local
 node_modules/
 artifacts/
 cache/
@@ -13,3 +14,5 @@ test-results/
 playwright-report/
 .playwright-mcp/
 blob-report/
+
+.vercel

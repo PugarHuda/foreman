@@ -17,7 +17,17 @@ queue](docs/dashboard.png)
 
 ---
 
-## Live on Base Sepolia
+## Live
+
+**[foreman-six-psi.vercel.app](https://foreman-six-psi.vercel.app)** — the real
+thing, wired to Base Sepolia. Press *Run agent* and it spends actual testnet
+money on your behalf.
+
+That is deliberate, and the blast radius is the point: the agent key holds
+0.002 ETH of gas, the on-chain spend permission caps it at $2,000 a month, and
+nothing above $500 executes without a second key. A stranger hammering the
+button is bounded by the same contract the plant relies on — which is easier
+to show than to argue.
 
 | | |
 |---|---|
