@@ -102,6 +102,7 @@ interface State {
   series: Sample[];
   quotes: { supplier: string; priceUsd: number; leadTimeHours: number }[];
   avoidedUsd: number;
+  explorer: string;
   chain: Chain | null;
   chainError: string | null;
 }
@@ -415,7 +416,18 @@ export default function Dashboard() {
           <section className="panel">
             <header>
               <h2 style={{ fontSize: 13 }}>Purchase orders</h2>
-              <span className="eyebrow">on chain</span>
+              {chain && data?.explorer ? (
+                <a
+                  className="eyebrow"
+                  href={`${data.explorer}/address/${chain.foreman}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  on chain ↗
+                </a>
+              ) : (
+                <span className="eyebrow">on chain</span>
+              )}
             </header>
             <div className="body">
               {open.length === 0 && <p className="empty">No orders placed yet.</p>}

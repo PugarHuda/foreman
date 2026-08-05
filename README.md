@@ -21,15 +21,21 @@ queue](docs/dashboard.png)
 
 | | |
 |---|---|
-| Foreman | [`0x481fe34ed995603abdb9998b7ecc8811e2707d87`](https://sepolia.basescan.org/address/0x481fe34ed995603abdb9998b7ecc8811e2707d87) |
-| USDC (mock) | [`0xdea6da93265871d828b20cace2badd5f5e70209d`](https://sepolia.basescan.org/address/0xdea6da93265871d828b20cace2badd5f5e70209d) |
+| Foreman | [`0x0954e50cbc85836c9e3fc6868d24b6118d974e9d`](https://sepolia.basescan.org/address/0x0954e50cbc85836c9e3fc6868d24b6118d974e9d) |
+| USDC (mock) | [`0xbcae987e3387f74867e56c6ddea1bc94af7932b5`](https://sepolia.basescan.org/address/0xbcae987e3387f74867e56c6ddea1bc94af7932b5) |
 
-A run you can check yourself:
+**[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
+straight off the running app by `scripts/record-demo.mjs`.
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x4df8fc11475446e89743eaac560d2736834dce14fc2ee188a724609474752f7d) — under the ceiling, funded straight from the agent budget
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x8e0efc5e079c70655eead65b6f1ac18871b8e8259ab18113d61e8cdcae95d2f8) — proposed only; no funds move
-- [A human approves it](https://sepolia.basescan.org/tx/0xdecdaf91237ea57b724e2b98968990d5d48591124d6711576d66a2578a4b5e80) — and the agent's budget is untouched, because the cap bounds the agent, not the plant
-- [Supplier paid on confirmed receipt](https://sepolia.basescan.org/tx/0x87c901f3c5e1a773a20cf9680cc372610cd8c84e2df543a757e16a733797d13f)
+Those four transactions, which you can check yourself:
+
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xc0d4b2fea67b3e71a230f38fb876bd67e3bac79bfd53a4aca9257e0c96866d98) — proposed and escrow-funded in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x6753c5444916589a653d95748408c31c9983f6ed4d1cd82b77cefd027de50c84) — proposed only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0xd5e10822bde2e99945d33c957767186ad6517104d883c29c82e2fd04786965a8) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier paid on confirmed receipt](https://sepolia.basescan.org/tx/0x844f85abfc988a04f5758901358ea7c6aa453d4e88278a44b2ad2bb6f5ddffac)
+
+The split across two transactions is the whole argument. One key can commit
+routine money; the other is required for anything that is not routine.
 
 ## Why this is Industrial 5.0
 
@@ -134,6 +140,20 @@ bounds the agent, not the plant.
 
 Approve it, ship the bearing, confirm receipt, and the supplier's USDC balance
 goes from 0 to 180.
+
+To record that run rather than perform it: `node scripts/record-demo.mjs`
+drives the whole sequence against a running dev server and writes
+`docs/demo.webm`.
+
+### Settling in real USDC
+
+Foreman takes any ERC-20. Set `USDC_ADDRESS=0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+and it settles in Circle's testnet USDC on Base Sepolia instead of a mock.
+
+The mock is the default deliberately. Circle's faucet issues 20 USDC every two
+hours, and a plant treasury of $20 buying a $0.18 bearing demonstrates nothing
+about maintenance economics. The mock keeps the figures at the size this
+actually runs at; the token behind them is one environment variable.
 
 ## Tests
 

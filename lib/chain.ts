@@ -54,6 +54,9 @@ export function txUrl(hash: string) {
   return `${EXPLORER}/tx/${hash}`;
 }
 
+/** Empty on a local node, where there is no explorer to link to. */
+export const explorerBase = () => EXPLORER;
+
 async function send(role: Role, functionName: string, args: unknown[]) {
   const wallet = walletFor(role);
   const { request } = await publicClient.simulateContract({

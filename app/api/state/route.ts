@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { snapshot, series, DEFAULT_ELAPSED_HOURS } from "@/lib/agent.ts";
-import { getState } from "@/lib/chain.ts";
+import { getState, explorerBase } from "@/lib/chain.ts";
 import { MACHINES, getQuotes, avoidedDowntimeUsd } from "@/lib/plant.ts";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +42,7 @@ export async function GET(req: Request) {
     series: series(machineId, hours),
     quotes: getQuotes(selected?.criticalPart ?? ""),
     avoidedUsd: avoidedUsd(chain?.pos ?? [], machines),
+    explorer: explorerBase(),
     chain,
     chainError,
   });
