@@ -31,8 +31,8 @@ to show than to argue.
 
 | | | |
 |---|---|---|
-| Foreman | [`0x011af865531c9f1e4300e78acd0901122b83c480`](https://sepolia.basescan.org/address/0x011af865531c9f1e4300e78acd0901122b83c480) | [read the verified source](https://base-sepolia.blockscout.com/address/0x011af865531c9f1e4300e78acd0901122b83c480#code) |
-| USDC (mock) | [`0x52759e09d3c70ca281c59da3122a7af8dfa51847`](https://sepolia.basescan.org/address/0x52759e09d3c70ca281c59da3122a7af8dfa51847) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0x52759e09d3c70ca281c59da3122a7af8dfa51847) |
+| Foreman | [`0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d`](https://sepolia.basescan.org/address/0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d) | [read the verified source](https://base-sepolia.blockscout.com/address/0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d#code) |
+| USDC (mock) | [`0xdc06c8c088fc4a109dfa392c5ded31ced372c4cb`](https://sepolia.basescan.org/address/0xdc06c8c088fc4a109dfa392c5ded31ced372c4cb) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d) |
 
 Both are verified, so the bytecode running on Base Sepolia can be checked
 against the source in this repo rather than taken on trust.
@@ -42,11 +42,12 @@ straight off the running app by `scripts/record-demo.mjs`.
 
 Those four transactions, which you can check yourself:
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xf634aff187c9430902945b26ad3f227fa74227e90cced24423ddecb8bb10048e) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0xf8e2d87b2d9c583a8016adfe14983489e5e0b82d82f4abcb05891772c4544f62) — `Proposed` only. No `Funded` event, no money moved
-- [A human approves it](https://sepolia.basescan.org/tx/0xfb3ce59cbda47434b866e1f8dc764518da58f02f09cc547f34bc7fbc7ba2cede) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
-- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0xcb0b573fcaf3db646084b039801821a34f4f6a11a4f432a0a943e24f87961ecb) — the `Shipped` event carries the document hash
-- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0x497a1d8509f87adf68167a62e4e91fd9c0eba3a135dffe3a81c7d3b0260c7520)
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x3e4d5517e05bdd3c28803fd18fa0da31011ecc10ba611b0f7710179199af6a65) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x30c620fe2f3f4dedf998e32843198b71b4364caec19031354c510f5268e86b7b) — `Proposed` only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0xecd813a69fc1901f7fa1e767ecf9f89efe5bd17363e73d46a25567c21fe8a3b3) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0x16720d7dc337014a2b6fa665c4cd8bd92b0b6813b02cdd8865fb712ef8e0075b) — the `Shipped` event carries the document hash
+- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0xedf8cc2c5c2a4b2bdcaa431a44b43f088db34da2472284dcfe554790b1e4654e)
+- [The part is issued to the machine](https://sepolia.basescan.org/tx/0xa5f5f478d9e2c8c5a06461fb8b7a45079c1325cb26698a9cd543bd6ae2143d5d) — it leaves the store, and [the agent orders the next one](https://sepolia.basescan.org/tx/0xee83a31a1fa33f0de0c3fcaa8b16cc020581a8569e976c8b7d790d661afa2dff)
 
 The split across two transactions is the whole argument. One key can commit
 routine money; the other is required for anything that is not routine.
@@ -106,7 +107,10 @@ approval queue.
 | Agent cannot overspend | `monthlyCap` per 30-day window, checked on every autonomous fund |
 | Agent cannot make large commitments alone | `autoApproveMax`; above it the PO sits in `Proposed` |
 | A human is never blocked by the agent's budget | `approvePO` bypasses the cap — the cap bounds the agent, not the plant |
-| Escrow does not move on a bare click | The supplier commits a despatch document hash with their own key; `confirmReceipt` reverts unless goods-in submits a reference that matches |
+| Escrow does not move on a bare click | The supplier commits a despatch document hash with their own key; `confirmReceipt` reverts unless goods-in submits a reference that matches. The reference is not derivable from the order id — one that anyone could compute would make the match ceremony rather than evidence |
+| A fitted part stops counting as stock | `fitPart` issues a delivered part to the machine. Goods receipt without consumption makes the store look fuller after every delivery until the agent stops ordering entirely |
+| A lost plant key does not freeze the treasury | `nominatePlant` / `acceptPlant`, two-step so a mistyped address cannot lock the contract. Only the plant can withdraw, approve or confirm, so an immutable owner was a single point of permanent failure |
+| An order's worth cannot drift | `rulHoursAtOrder` is fixed on chain when the order is placed. Recomputing avoided downtime from today's projection rewrites what a past decision was worth |
 | Supplier cannot be stiffed | `claimAfterTimeout` after 14 days from shipping |
 | Plant cannot be stiffed | escrow only releases on `confirmReceipt` or that timeout |
 | A cancelled order does not burn the month | `cancelPO` refunds budget and escrow |

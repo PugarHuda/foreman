@@ -27,7 +27,15 @@ const KEY_ENV: Record<Role, string> = {
   supplierB: "SUPPLIER_B_KEY",
 };
 
-export const STATUS = ["None", "Proposed", "Funded", "Shipped", "Released", "Cancelled"] as const;
+export const STATUS = [
+  "None",
+  "Proposed",
+  "Funded",
+  "Shipped",
+  "Released",
+  "Cancelled",
+  "Fitted",
+] as const;
 export type StatusName = (typeof STATUS)[number];
 
 /**
@@ -94,6 +102,8 @@ export interface PurchaseOrder {
   machineId: number;
   amountUsd: number;
   partNo: string;
+  /** Hours of life the machine had left when this was ordered. */
+  rulHoursAtOrder: number;
   /** Despatch document the supplier committed to, once they have shipped. */
   waybill: string | null;
 }
@@ -138,6 +148,7 @@ export async function getState(): Promise<PlantState> {
     machineId: Number(p.machineId),
     amountUsd: usd(p.amount),
     partNo: p.partNo as string,
+    rulHoursAtOrder: Number(p.rulHoursAtOrder ?? 0),
     waybill:
       p.deliveryRef && p.deliveryRef !== `0x${"0".repeat(64)}` ? waybillFor(id) : null,
   }));
@@ -165,12 +176,14 @@ export async function proposePO(
   partNo: string,
   supplier: Address,
   amountUsd: number,
+  rulHoursAtOrder = 0,
 ): Promise<{ hash: string; id: number; status: StatusName }> {
   const { hash, receipt } = await send("agent", "proposePO", [
     machineId,
     partNo,
     supplier,
     BigInt(Math.round(amountUsd * 1e6)),
+    Math.max(0, Math.round(rulHoursAtOrder)),
   ]);
 
   const events = parseEventLogs({ abi: foreman.abi, logs: receipt.logs });
@@ -187,6 +200,9 @@ export async function proposePO(
 
 export const approvePO = (id: number) => send("plant", "approvePO", [BigInt(id)]).then((r) => r.hash);
 export const cancelPO = (id: number) => send("plant", "cancelPO", [BigInt(id)]).then((r) => r.hash);
+
+/** Issue a delivered part from the store to the machine. */
+export const fitPart = (id: number) => send("plant", "fitPart", [BigInt(id)]).then((r) => r.hash);
 
 /** Goods-in submits the reference it read off the document that arrived. */
 export const confirmReceipt = (id: number) =>

@@ -225,11 +225,15 @@ async function dispatch(
         };
       }
 
+      // The projection at the moment of the decision, fixed on chain so the
+      // order's worth cannot drift as the machine keeps degrading.
+      const { health } = healthOf(args.machine_id, elapsedHours);
       const po = await deps.placeOrder(
         args.machine_id,
         args.part_no,
         args.supplier_address,
         args.amount_usd,
+        health.rulHours ?? 0,
       );
       steps.push({
         kind: "action",
@@ -296,6 +300,7 @@ export interface AgentDeps {
     partNo: string,
     supplier: `0x${string}`,
     amountUsd: number,
+    rulHoursAtOrder: number,
   ) => Promise<{ hash: string; id: number; status: string }>;
 }
 

@@ -20,6 +20,7 @@ const Status = {
   Shipped: 3,
   Released: 4,
   Cancelled: 5,
+  Fitted: 6,
 } as const;
 
 async function deploy() {
@@ -54,7 +55,7 @@ describe("Foreman", () => {
   it("funds a routine PO autonomously and draws it from the agent budget", async () => {
     const { agent, supplier, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
 
@@ -69,7 +70,7 @@ describe("Foreman", () => {
     const { plant, agent, supplier, foreman } = await deploy();
     const spindle = usdc(4_000);
 
-    await foreman.write.proposePO([7, "SPN-880", supplier.account.address, spindle], {
+    await foreman.write.proposePO([7, "SPN-880", supplier.account.address, spindle, 35], {
       account: agent.account,
     });
     assert.equal((await foreman.read.getPO([0n])).status, Status.Proposed);
@@ -89,14 +90,14 @@ describe("Foreman", () => {
     const { agent, supplier, foreman } = await deploy();
 
     for (let i = 0; i < 4; i++) {
-      await foreman.write.proposePO([7, `PART-${i}`, supplier.account.address, AUTO], {
+      await foreman.write.proposePO([7, `PART-${i}`, supplier.account.address, AUTO, 58], {
         account: agent.account,
       });
     }
     assert.equal(await foreman.read.remainingBudget(), 0n);
 
     await expectRevert(
-      foreman.write.proposePO([7, "PART-X", supplier.account.address, usdc(1)], {
+      foreman.write.proposePO([7, "PART-X", supplier.account.address, usdc(1), 58], {
         account: agent.account,
       }),
       "CapExceeded",
@@ -104,7 +105,7 @@ describe("Foreman", () => {
 
     await networkHelpers.time.increase(31 * 24 * 60 * 60);
     assert.equal(await foreman.read.remainingBudget(), CAP);
-    await foreman.write.proposePO([7, "PART-X", supplier.account.address, usdc(1)], {
+    await foreman.write.proposePO([7, "PART-X", supplier.account.address, usdc(1), 58], {
       account: agent.account,
     });
     assert.equal((await foreman.read.getPO([4n])).status, Status.Funded);
@@ -113,7 +114,7 @@ describe("Foreman", () => {
   it("pays the supplier on confirmed receipt", async () => {
     const { plant, agent, supplier, token, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     await foreman.write.markShipped([0n, REF], { account: supplier.account });
@@ -129,7 +130,7 @@ describe("Foreman", () => {
   it("will not release escrow against a document nobody committed to", async () => {
     const { plant, agent, supplier, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
 
@@ -155,7 +156,7 @@ describe("Foreman", () => {
   it("still lets the plant settle an order the supplier never marked despatched", async () => {
     const { plant, agent, supplier, token, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     // Parts turned up without paperwork; the plant's own money, the plant's call.
@@ -166,7 +167,7 @@ describe("Foreman", () => {
   it("lets a shipped supplier collect after the receipt timeout, but not before", async () => {
     const { agent, supplier, token, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     await foreman.write.markShipped([0n, REF], { account: supplier.account });
@@ -184,7 +185,7 @@ describe("Foreman", () => {
   it("returns escrow and budget when the plant cancels a funded PO", async () => {
     const { plant, agent, supplier, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     await foreman.write.cancelPO([0n], { account: plant.account });
@@ -199,17 +200,17 @@ describe("Foreman", () => {
     const { plant, agent, supplier, foreman } = await deploy();
 
     // Spend most of the window, then let it roll over.
-    await foreman.write.proposePO([7, "OLD", supplier.account.address, AUTO], {
+    await foreman.write.proposePO([7, "OLD", supplier.account.address, AUTO, 58], {
       account: agent.account,
     });
     await networkHelpers.time.increase(31 * 24 * 60 * 60);
     assert.equal(await foreman.read.remainingBudget(), CAP);
 
     // Spend more in the fresh window than the old order was worth.
-    await foreman.write.proposePO([7, "NEW-A", supplier.account.address, AUTO], {
+    await foreman.write.proposePO([7, "NEW-A", supplier.account.address, AUTO, 58], {
       account: agent.account,
     });
-    await foreman.write.proposePO([7, "NEW-B", supplier.account.address, AUTO], {
+    await foreman.write.proposePO([7, "NEW-B", supplier.account.address, AUTO, 58], {
       account: agent.account,
     });
     const spentThisWindow = await foreman.read.spentInWindow();
@@ -228,7 +229,7 @@ describe("Foreman", () => {
   it("refuses a cancelled PO a second time and blocks shipping it", async () => {
     const { plant, agent, supplier, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     await foreman.write.cancelPO([0n], { account: plant.account });
@@ -244,19 +245,19 @@ describe("Foreman", () => {
     const { plant, agent, supplier, outsider, foreman } = await deploy();
 
     await expectRevert(
-      foreman.write.proposePO([7, "X", supplier.account.address, usdc(10)], {
+      foreman.write.proposePO([7, "X", supplier.account.address, usdc(10), 58], {
         account: outsider.account,
       }),
       "NotAgent",
     );
     await expectRevert(
-      foreman.write.proposePO([7, "X", supplier.account.address, usdc(10)], {
+      foreman.write.proposePO([7, "X", supplier.account.address, usdc(10), 58], {
         account: plant.account,
       }),
       "NotAgent",
     );
 
-    await foreman.write.proposePO([7, "X", supplier.account.address, usdc(4_000)], {
+    await foreman.write.proposePO([7, "X", supplier.account.address, usdc(4_000), 58], {
       account: agent.account,
     });
     await expectRevert(foreman.write.approvePO([0n], { account: agent.account }), "NotPlant");
@@ -275,25 +276,25 @@ describe("Foreman", () => {
   it("refuses a second open order for the same machine and part", async () => {
     const { plant, agent, supplier, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     assert.equal(await foreman.read.isOnOrder([7, "6205-2RS"]), true);
 
     // The agent misreading its own order book must not cost the plant twice.
     await expectRevert(
-      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
         account: agent.account,
       }),
       "AlreadyOnOrder",
     );
 
     // A different part on the same machine is a different line.
-    await foreman.write.proposePO([7, "SPN-880", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "SPN-880", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     // So is the same part on a different machine.
-    await foreman.write.proposePO([11, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([11, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     assert.equal(await foreman.read.poCount(), 3n);
@@ -302,23 +303,98 @@ describe("Foreman", () => {
   it("reopens the line once the order is settled or dropped", async () => {
     const { plant, agent, supplier, foreman } = await deploy();
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     await foreman.write.markShipped([0n, REF], { account: supplier.account });
     await foreman.write.confirmReceipt([0n, REF], { account: plant.account });
     assert.equal(await foreman.read.isOnOrder([7, "6205-2RS"]), false, "delivered frees the line");
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     await foreman.write.cancelPO([1n], { account: plant.account });
     assert.equal(await foreman.read.isOnOrder([7, "6205-2RS"]), false, "cancelled frees the line");
 
-    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
       account: agent.account,
     });
     assert.equal(await foreman.read.poCount(), 3n);
+  });
+
+  it("issues a delivered part to the machine, and only once", async () => {
+    const { plant, agent, supplier, foreman } = await deploy();
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
+      account: agent.account,
+    });
+    await expectRevert(foreman.write.fitPart([0n], { account: plant.account }), "BadStatus");
+
+    await foreman.write.markShipped([0n, REF], { account: supplier.account });
+    await foreman.write.confirmReceipt([0n, REF], { account: plant.account });
+
+    await foreman.write.fitPart([0n], { account: plant.account });
+    assert.equal((await foreman.read.getPO([0n])).status, Status.Fitted);
+
+    await expectRevert(foreman.write.fitPart([0n], { account: plant.account }), "BadStatus");
+    await expectRevert(foreman.write.fitPart([0n], { account: agent.account }), "NotPlant");
+  });
+
+  it("records what the order was worth when it was placed", async () => {
+    const { agent, supplier, foreman } = await deploy();
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
+      account: agent.account,
+    });
+    assert.equal(
+      (await foreman.read.getPO([0n])).rulHoursAtOrder,
+      58,
+      "the projection at order time is fixed, not recomputed later",
+    );
+  });
+
+  it("hands the plant role over in two steps, so a typo cannot lock the treasury", async () => {
+    const { plant, agent, supplier, outsider, foreman } = await deploy();
+
+    await expectRevert(
+      foreman.write.nominatePlant([outsider.account.address], { account: agent.account }),
+      "NotPlant",
+    );
+
+    const currentPlant = async () => (await foreman.read.plant()).toLowerCase();
+
+    await foreman.write.nominatePlant([outsider.account.address], { account: plant.account });
+    assert.equal(
+      await currentPlant(),
+      plant.account.address.toLowerCase(),
+      "nothing moves on nomination",
+    );
+
+    // Only the nominee can complete it — proving the key actually signs.
+    await expectRevert(foreman.write.acceptPlant({ account: agent.account }), "NotNominated");
+
+    await foreman.write.acceptPlant({ account: outsider.account });
+    assert.equal(await currentPlant(), outsider.account.address.toLowerCase());
+
+    // Authority really moved.
+    await expectRevert(
+      foreman.write.setSupplier([supplier.account.address, false], { account: plant.account }),
+      "NotPlant",
+    );
+    await foreman.write.setSupplier([supplier.account.address, false], {
+      account: outsider.account,
+    });
+  });
+
+  it("only lets the plant top up the treasury", async () => {
+    const { outsider, token, foreman } = await deploy();
+
+    await token.write.mint([outsider.account.address, usdc(100)]);
+    await token.write.approve([foreman.address, usdc(100)], { account: outsider.account });
+    await expectRevert(
+      foreman.write.deposit([usdc(100)], { account: outsider.account }),
+      "NotPlant",
+    );
   });
 
   it("will not pay an address the plant never vetted", async () => {
@@ -327,14 +403,14 @@ describe("Foreman", () => {
     // The whole premise of an agent holding funds rests on this: even with a
     // valid key and budget to spare, it cannot invent a payee.
     await expectRevert(
-      foreman.write.proposePO([7, "6205-2RS", outsider.account.address, usdc(180)], {
+      foreman.write.proposePO([7, "6205-2RS", outsider.account.address, usdc(180), 58], {
         account: agent.account,
       }),
       "SupplierNotApproved",
     );
 
     await foreman.write.setSupplier([outsider.account.address, true], { account: plant.account });
-    await foreman.write.proposePO([7, "6205-2RS", outsider.account.address, usdc(180)], {
+    await foreman.write.proposePO([7, "6205-2RS", outsider.account.address, usdc(180), 58], {
       account: agent.account,
     });
     assert.equal((await foreman.read.getPO([0n])).status, Status.Funded);
@@ -342,7 +418,7 @@ describe("Foreman", () => {
     // ...and the plant can withdraw that permission again.
     await foreman.write.setSupplier([supplier.account.address, false], { account: plant.account });
     await expectRevert(
-      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
         account: agent.account,
       }),
       "SupplierNotApproved",
@@ -365,7 +441,7 @@ describe("Foreman", () => {
 
     await foreman.write.withdraw([DEPOSIT - usdc(100)], { account: plant.account });
     await expectRevert(
-      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
         account: agent.account,
       }),
       "Underfunded",

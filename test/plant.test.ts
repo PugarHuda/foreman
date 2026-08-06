@@ -48,6 +48,38 @@ describe("stock coverage", () => {
     assert.equal(stockOnHand([], "6204-ZZ"), 4);
     assert.equal(stockOnHand([po("6204-ZZ", "Released")], "6204-ZZ"), 5);
   });
+
+  it("takes a fitted part back off the shelf", () => {
+    // Without this the store grows on every delivery and the agent, seeing
+    // stock it does not have, stops ordering for good.
+    assert.equal(stockOnHand([po("6205-2RS", "Fitted")], "6205-2RS"), 0);
+    assert.equal(
+      stockOnHand([po("6205-2RS", "Released"), po("6205-2RS", "Fitted")], "6205-2RS"),
+      1,
+      "one delivered and one fitted leaves one on the shelf",
+    );
+  });
+
+  it("does not treat a fitted part as still on its way", () => {
+    assert.equal(onOrderCount([po("6205-2RS", "Fitted")], "6205-2RS"), 0);
+  });
+});
+
+describe("delivery reference", () => {
+  it("is not guessable from the order id alone", async () => {
+    const { waybillFor } = await import("../lib/plant.ts");
+
+    // A reference anyone could derive proves nothing about a despatch.
+    assert.notEqual(waybillFor(0), "WB-000000");
+    assert.match(waybillFor(0), /^WB-\d{4}-[0-9A-Z]+$/);
+  });
+
+  it("is stable for an order, and different between orders", async () => {
+    const { waybillFor } = await import("../lib/plant.ts");
+
+    assert.equal(waybillFor(7), waybillFor(7), "goods-in must reproduce what despatch committed");
+    assert.notEqual(waybillFor(7), waybillFor(8));
+  });
 });
 
 describe("avoided downtime", () => {

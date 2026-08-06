@@ -316,8 +316,8 @@ test.describe("wrong path — bad input is refused, not crashed on", () => {
     let settled: { id: number } | undefined;
     for (let i = 0; i < 5 && !settled; i++) {
       const state = await (await request.get("/api/state")).json();
-      settled = state.chain?.pos?.find(
-        (p: { status: string }) => p.status === "Released" || p.status === "Cancelled",
+      settled = state.chain?.pos?.find((p: { status: string }) =>
+        ["Released", "Cancelled", "Fitted"].includes(p.status),
       );
       if (!settled) await new Promise((r) => setTimeout(r, 1500));
     }
@@ -352,6 +352,7 @@ test.describe("wrong path — bad input is refused, not crashed on", () => {
             machineId: 7,
             amountUsd: 180,
             partNo: "6205-2RS",
+            rulHoursAtOrder: 58,
             waybill: null,
           },
         ],

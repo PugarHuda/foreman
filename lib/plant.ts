@@ -129,7 +129,19 @@ export function getStock(partNo: string): number {
  * the demo carries no hidden state and survives a page reload; swapping in a
  * carrier API changes this one function.
  */
-export const waybillFor = (poId: number) => `WB-${String(poId).padStart(6, "0")}`;
+export function waybillFor(poId: number): string {
+  // A reference anyone can compute proves nothing: a supplier who never
+  // despatched could commit to it, and goods-in "matching" it is ceremony.
+  // The salt stands in for a carrier-issued number that is unpredictable and
+  // arrives physically with the parts. Set DELIVERY_SALT in production; the
+  // fallback keeps the demo self-contained and is documented as such.
+  const salt = process.env.DELIVERY_SALT ?? "foreman-demo";
+  let h = 2166136261;
+  for (const ch of `${salt}:${poId}`) {
+    h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  }
+  return `WB-${String(poId).padStart(4, "0")}-${h.toString(36).toUpperCase().padStart(7, "0")}`;
+}
 
 /** An order still on its way to the plant. Cancelled and Released are done. */
 const OPEN_STATUSES = new Set(["Proposed", "Funded", "Shipped"]);
@@ -147,17 +159,21 @@ export function onOrderCount(
 }
 
 /**
- * On-hand stock, including deliveries that have already settled. A Released
- * order means the part arrived and was paid for, so it belongs on the shelf —
- * otherwise the store shows zero directly after a delivery and the agent goes
- * and buys another one.
+ * On-hand stock: what the fixture starts with, plus deliveries that have
+ * landed, minus anything issued to a machine.
+ *
+ * Both halves matter. Without the delivered count the store reads zero
+ * immediately after a delivery and the agent buys another one; without the
+ * fitted count a part that was bolted onto the machine still sits on the
+ * shelf forever, the store looks fuller after every delivery, and eventually
+ * the agent stops ordering anything at all.
  */
 export function stockOnHand(
   pos: readonly { partNo: string; status: string }[],
   partNo: string,
 ): number {
-  const delivered = pos.filter((p) => p.partNo === partNo && p.status === "Released").length;
-  return getStock(partNo) + delivered;
+  const onShelf = pos.filter((p) => p.partNo === partNo && p.status === "Released").length;
+  return getStock(partNo) + onShelf;
 }
 
 /**

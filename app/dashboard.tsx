@@ -105,6 +105,7 @@ interface PO {
   machineId: number;
   amountUsd: number;
   partNo: string;
+  rulHoursAtOrder: number;
   waybill: string | null;
 }
 
@@ -540,6 +541,15 @@ export default function Dashboard() {
                         onClick={() => poAction("confirm", po.id)}
                       >
                         {busy === `confirm-${po.id}` ? "…" : "Confirm receipt & pay"}
+                      </button>
+                    )}
+                    {po.status === "Released" && (
+                      <button
+                        className="btn"
+                        disabled={busy !== null}
+                        onClick={() => poAction("fit", po.id)}
+                      >
+                        {busy === `fit-${po.id}` ? "…" : "Fit to machine"}
                       </button>
                     )}
                   </div>

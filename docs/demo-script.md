@@ -65,6 +65,19 @@ Press **Approve $4,000**, then note the budget:
 > confirmation has to match it or the contract reverts. Money moves when two
 > parties agree on a document — not when someone clicks a button.
 
+Then **Fit to machine**:
+
+> And it leaves the store. Goods receipt without consumption is how an MRP
+> convinces itself it is fully stocked and quietly stops ordering.
+
+## Resetting between runs
+
+Press **Fit to machine** on the delivered order. The store goes back to zero,
+and the agent will order again on the next run — so you can rehearse and then
+present on the same deployment. No redeploy needed.
+
+If you want a completely clean board anyway: `npm run deploy`, 30 seconds.
+
 ---
 
 ## The three questions you will be asked
@@ -118,8 +131,8 @@ function, `waybillFor` — the contract does not change.
 
 | | |
 |---|---|
-| Contract | 215 lines, 37 tests |
-| Test suite | 37 contract + unit, 25 browser |
+| Contract | ~280 lines, verified on Blockscout and Sourcify |
+| Test suite | 52 contract + unit (offline), 28 browser |
 | Agent budget | $2,000 per 30 days, $500 per order without a human |
 | CNC-07 downtime | $890/hour |
 | Bearing | $180, 36h lead · Spindle $4,000, 120h lead |

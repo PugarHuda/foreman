@@ -18,7 +18,9 @@ contract Foreman {
         Funded,
         Shipped,
         Released,
-        Cancelled
+        Cancelled,
+        /// Issued from the store to the machine. A fitted part is no longer stock.
+        Fitted
     }
 
     struct PO {
@@ -27,6 +29,12 @@ contract Foreman {
         Status status;
         bool agentFunded; // funded on the autonomous lane, so it consumed budget
         uint32 machineId;
+        /**
+         * Projected hours of life left when this was ordered. The value an
+         * order buys back is fixed the moment it is placed — recomputing it
+         * from today's projection makes a past decision's worth wander.
+         */
+        uint32 rulHoursAtOrder;
         uint128 amount;
         /**
          * Hash of the supplier's despatch document — waybill, consignment
@@ -46,7 +54,15 @@ contract Foreman {
     uint40 public constant BUDGET_WINDOW = 30 days;
 
     IERC20 public immutable token;
-    address public immutable plant;
+
+    /**
+     * The human authority. Not immutable: a plant that loses this key would
+     * otherwise have its treasury frozen for good, since only this address can
+     * withdraw, approve or confirm. Handover is two-step so a mistyped address
+     * cannot lock the contract — the new holder has to prove it can sign.
+     */
+    address public plant;
+    address public nominatedPlant;
 
     address public agent;
     uint128 public monthlyCap;
@@ -84,6 +100,9 @@ contract Foreman {
     event Proposed(uint256 indexed id, uint32 indexed machineId, address indexed supplier, uint128 amount, string partNo);
     event Funded(uint256 indexed id, uint128 amount, bool autonomous);
     event Shipped(uint256 indexed id, bytes32 deliveryRef);
+    event Fitted(uint256 indexed id, uint32 indexed machineId, string partNo);
+    event PlantNominated(address indexed nominee);
+    event PlantTransferred(address indexed from, address indexed to);
     event Released(uint256 indexed id, address indexed supplier, uint128 amount);
     event Cancelled(uint256 indexed id, uint128 refunded);
 
@@ -97,6 +116,7 @@ contract Foreman {
     error NoDeliveryRef();
     error DeliveryRefMismatch();
     error AlreadyOnOrder();
+    error NotNominated();
     error CapExceeded();
     error Underfunded();
     error TooEarly();
@@ -118,7 +138,7 @@ contract Foreman {
 
     // --- treasury ---
 
-    function deposit(uint128 amount) external {
+    function deposit(uint128 amount) external onlyPlant {
         if (amount == 0) revert BadAmount();
         token.safeTransferFrom(msg.sender, address(this), amount);
         available += amount;
@@ -141,6 +161,21 @@ contract Foreman {
         emit PolicySet(_agent, _monthlyCap, _autoApproveMax);
     }
 
+    /// @notice Start handing the plant role to a new key. Nothing changes yet.
+    function nominatePlant(address nominee) external onlyPlant {
+        if (nominee == address(0)) revert BadSupplier();
+        nominatedPlant = nominee;
+        emit PlantNominated(nominee);
+    }
+
+    /// @notice The nominee proves it can sign, and takes over.
+    function acceptPlant() external {
+        if (msg.sender != nominatedPlant) revert NotNominated();
+        emit PlantTransferred(plant, msg.sender);
+        plant = msg.sender;
+        nominatedPlant = address(0);
+    }
+
     /// @notice Vet a payee, or drop one. Only the plant may widen the set the
     /// agent is allowed to pay.
     function setSupplier(address supplier, bool approved) external onlyPlant {
@@ -158,10 +193,13 @@ contract Foreman {
     // --- purchase orders ---
 
     /// @notice The agent proposes a PO. Below `autoApproveMax` it funds itself.
-    function proposePO(uint32 machineId, string calldata partNo, address supplier, uint128 amount)
-        external
-        returns (uint256 id)
-    {
+    function proposePO(
+        uint32 machineId,
+        string calldata partNo,
+        address supplier,
+        uint128 amount,
+        uint32 rulHoursAtOrder
+    ) external returns (uint256 id) {
         if (msg.sender != agent) revert NotAgent();
         if (!approvedSupplier[supplier]) revert SupplierNotApproved();
         if (amount == 0) revert BadAmount();
@@ -178,6 +216,7 @@ contract Foreman {
                 status: Status.Proposed,
                 agentFunded: false,
                 machineId: machineId,
+                rulHoursAtOrder: rulHoursAtOrder,
                 amount: amount,
                 deliveryRef: bytes32(0),
                 partNo: partNo
@@ -273,6 +312,22 @@ contract Foreman {
         escrowed -= amount;
         token.safeTransfer(supplier, amount);
         emit Released(id, supplier, amount);
+    }
+
+    /**
+     * @notice Issue a delivered part from the store to the machine.
+     *
+     * Goods receipt is only half of stock control. Without this a part that
+     * arrived and was fitted still counts as sitting on the shelf, the store
+     * looks fuller every delivery, and the agent eventually stops ordering
+     * anything at all.
+     */
+    function fitPart(uint256 id) external onlyPlant {
+        PO storage po = _pos[id];
+        if (po.status != Status.Released) revert BadStatus();
+        po.status = Status.Fitted;
+        po.since = uint40(block.timestamp);
+        emit Fitted(id, po.machineId, po.partNo);
     }
 
     /// @notice Plant kills a PO before the supplier ships. Budget is returned

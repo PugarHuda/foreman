@@ -55,7 +55,13 @@ export async function GET(req: Request) {
  * the whole projected outage.
  */
 function avoidedUsd(
-  pos: { status: string; machineId: number; partNo: string; supplier: string }[],
+  pos: {
+    status: string;
+    machineId: number;
+    partNo: string;
+    supplier: string;
+    rulHoursAtOrder: number;
+  }[],
   machines: { id: number; rulHours: number | null }[],
 ): number {
   const inFlight = new Set(["Funded", "Shipped", "Released"]);
@@ -69,13 +75,14 @@ function avoidedUsd(
     if (!inFlight.has(po.status)) continue;
 
     const machine = MACHINES.find((m) => m.id === po.machineId);
-    const health = machines.find((m) => m.id === po.machineId);
     const quote = getQuotes(po.partNo).find(
       (q) => q.address.toLowerCase() === po.supplier.toLowerCase(),
     );
-    if (!machine || !quote || health?.rulHours == null) continue;
+    // The projection recorded on chain when the order was placed, not today's
+    // — otherwise moving the run hour rewrites what a past decision was worth.
+    if (!machine || !quote || !po.rulHoursAtOrder) continue;
 
-    const saved = avoidedDowntimeUsd(machine, health.rulHours, quote.leadTimeHours);
+    const saved = avoidedDowntimeUsd(machine, po.rulHoursAtOrder, quote.leadTimeHours);
     bestPerMachine.set(machine.id, Math.max(bestPerMachine.get(machine.id) ?? 0, saved));
   }
 

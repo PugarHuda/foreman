@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
-import { approvePO, markShipped, confirmReceipt, cancelPO, poCount, txUrl } from "@/lib/chain.ts";
+import {
+  approvePO,
+  markShipped,
+  confirmReceipt,
+  cancelPO,
+  fitPart,
+  poCount,
+  txUrl,
+} from "@/lib/chain.ts";
 import { denied } from "@/lib/guard.ts";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +18,7 @@ const ACTIONS = {
   ship: markShipped,
   confirm: confirmReceipt,
   cancel: cancelPO,
+  fit: fitPart,
 } as const;
 
 /**
