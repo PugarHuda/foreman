@@ -48,14 +48,23 @@ const publicClient = createPublicClient({ chain, transport: http(rpc) });
 const wallet = createWalletClient({ account: plant, chain, transport: http(rpc) });
 
 /**
- * Two confirmations, not one. Base Sepolia's public RPC will hand back a
- * receipt and then still answer eth_estimateGas from the previous state, so a
- * one-confirmation wait lets the next call simulate against stale storage —
- * which is how `approve` then `deposit` failed on insufficient allowance.
+ * Two confirmations on a public RPC, one locally.
+ *
+ * Base Sepolia hands back a receipt and then still answers eth_estimateGas
+ * from the previous state, so a one-confirmation wait lets the next call
+ * simulate against stale storage — that is how `approve` then `deposit` failed
+ * on insufficient allowance. A local node has no such lag, and worse: it mines
+ * one block per transaction, so a second confirmation never arrives and the
+ * deploy hangs forever. CI caught that; the local path had not been run since
+ * the confirmation count went up.
+ *
  * Also fails loudly on a reverted transaction instead of sailing past it.
  */
 async function wait(hash) {
-  const receipt = await publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash,
+    confirmations: LOCAL ? 1 : 2,
+  });
   if (receipt.status !== "success") throw new Error(`transaction reverted: ${hash}`);
   return receipt;
 }
