@@ -128,6 +128,42 @@ describe("agent loop", () => {
   });
 });
 
+describe("streaming", () => {
+  it("reports each step as it happens, not at the end", async () => {
+    const seen: string[] = [];
+    const { chat } = scripted([
+      reply("Checking.", [{ name: "get_machine_health", args: { machine_id: 7 } }]),
+      reply("Checking stock.", [{ name: "check_inventory", args: { part_no: "6205-2RS" } }]),
+      reply("Nothing needed."),
+    ]);
+
+    const run = await runAgent(300, {
+      chat,
+      readOrders: emptyBook,
+      onStep: (step) => seen.push(step.label),
+    });
+
+    assert.deepEqual(
+      seen,
+      run.steps.map((s) => s.label),
+      "everything recorded must also have been streamed",
+    );
+    assert.ok(seen.some((l) => l.startsWith("get_machine_health")));
+    assert.ok(seen.some((l) => l.startsWith("check_inventory")));
+  });
+
+  it("streams a failure rather than swallowing it until the end", async () => {
+    const seen: string[] = [];
+    const { chat } = scripted([
+      reply("Checking.", [{ name: "get_machine_health", args: { machine_id: 999 } }]),
+      reply("Not on this line."),
+    ]);
+
+    await runAgent(300, { chat, readOrders: emptyBook, onStep: (s) => seen.push(s.label) });
+    assert.ok(seen.some((l) => l.includes("failed")));
+  });
+});
+
 describe("placing an order", () => {
   it("records an autonomous order as signed by the agent", async () => {
     const chain = fakeChain();

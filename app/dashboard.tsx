@@ -229,11 +229,36 @@ export default function Dashboard() {
     setSummary("");
     try {
       const res = await post("/api/agent", { hours }, 150);
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error);
-      setSteps(out.steps);
-      setSummary(out.summary);
-      setRanAtHour(out.hours ?? hours);
+      if (!res.ok) {
+        throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+      }
+
+      // Newline-delimited JSON: steps arrive as they happen, so the panel
+      // shows the agent working rather than a spinner and then a wall of text.
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let failed: string | null = null;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const raw of lines) {
+          if (!raw.trim()) continue;
+          const msg = JSON.parse(raw);
+          if (msg.type === "step") setSteps((prev) => [...prev, msg.step]);
+          else if (msg.type === "done") {
+            setSummary(msg.summary);
+            setRanAtHour(msg.hours ?? hours);
+          } else if (msg.type === "error") failed = msg.error;
+        }
+      }
+
+      if (failed) throw new Error(failed);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

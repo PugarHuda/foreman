@@ -25,8 +25,17 @@ const COLUMNS = [
   "explorer",
 ] as const;
 
-const escape = (v: unknown) => {
-  const s = v === null || v === undefined ? "" : String(v);
+/**
+ * Quoting is not enough.
+ *
+ * Part numbers reach this file from the model, and a spreadsheet treats a
+ * cell beginning = + - @ or a tab as a formula to execute — so a part number
+ * of `=HYPERLINK(...)` becomes a live link in the auditor's Excel. Prefixing
+ * with an apostrophe forces it back to text; the apostrophe is not displayed.
+ */
+export const escapeCell = (v: unknown) => {
+  const raw = v === null || v === undefined ? "" : String(v);
+  const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 
@@ -62,7 +71,7 @@ export async function GET() {
     ];
   });
 
-  const csv = [COLUMNS.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
+  const csv = [COLUMNS.join(","), ...rows.map((r) => r.map(escapeCell).join(","))].join("\n");
   const day = new Date().toISOString().slice(0, 10);
 
   return new Response(csv, {

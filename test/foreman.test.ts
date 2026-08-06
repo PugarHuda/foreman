@@ -456,6 +456,29 @@ describe("Foreman", () => {
     );
   });
 
+  it("will not let the model write a novel into plant storage", async () => {
+    const { agent, supplier, foreman } = await deploy();
+
+    await expectRevert(
+      foreman.write.proposePO([7, "", supplier.account.address, usdc(180), 58], {
+        account: agent.account,
+      }),
+      "BadPartNo",
+    );
+    await expectRevert(
+      foreman.write.proposePO([7, "X".repeat(41), supplier.account.address, usdc(180), 58], {
+        account: agent.account,
+      }),
+      "BadPartNo",
+    );
+
+    // A real part number is nowhere near the limit.
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
+      account: agent.account,
+    });
+    assert.equal((await foreman.read.getPO([0n])).partNo, "6205-2RS");
+  });
+
   it("will not pay an address the plant never vetted", async () => {
     const { plant, agent, supplier, outsider, foreman } = await deploy();
 

@@ -128,6 +128,7 @@ contract Foreman {
     error DeliveryRefMismatch();
     error AlreadyOnOrder();
     error NotNominated();
+    error BadPartNo();
     error CapExceeded();
     error Underfunded();
     error TooEarly();
@@ -214,6 +215,12 @@ contract Foreman {
         if (msg.sender != agent) revert NotAgent();
         if (!approvedSupplier[supplier]) revert SupplierNotApproved();
         if (amount == 0) revert BadAmount();
+
+        /* The part number is free text written by a model. Real ones are
+           short; anything long is either a mistake or someone using plant
+           storage as a notepad, and it is the plant paying the gas. */
+        uint256 len = bytes(partNo).length;
+        if (len == 0 || len > 40) revert BadPartNo();
 
         bytes32 line = _lineKey(machineId, partNo);
         if (_openLine[line]) revert AlreadyOnOrder();

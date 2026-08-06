@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runAgent, DEFAULT_ELAPSED_HOURS } from "@/lib/agent.ts";
+import { runAgent, DEFAULT_ELAPSED_HOURS, type AgentStep } from "@/lib/agent.ts";
 import { denied } from "@/lib/guard.ts";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +17,9 @@ export const maxDuration = 300;
  */
 let inFlight: Promise<unknown> | null = null;
 
+/** One JSON object per line — no framing to get wrong, and curl reads it. */
+const line = (obj: unknown) => new TextEncoder().encode(`${JSON.stringify(obj)}\n`);
+
 export async function POST(req: Request) {
   const no = denied(req);
   if (no) return no;
@@ -30,16 +33,44 @@ export async function POST(req: Request) {
     );
   }
 
-  const run = runAgent(Number(hours));
-  inFlight = run;
-  try {
-    return NextResponse.json(await run);
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
-  } finally {
-    inFlight = null;
-  }
+  /* Streamed rather than returned. A shift assessment takes twenty to forty
+     seconds; holding the connection open and answering all at once turns the
+     one part worth watching — the agent working through a decision about
+     money — into a spinner. */
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj: unknown) => {
+        try {
+          controller.enqueue(line(obj));
+        } catch {
+          /* Client hung up. The run finishes regardless: it may already have
+             committed funds, and abandoning it half way is worse. */
+        }
+      };
+
+      const run = runAgent(Number(hours), {
+        onStep: (step: AgentStep) => send({ type: "step", step }),
+      });
+      inFlight = run;
+
+      try {
+        const result = await run;
+        send({ type: "done", summary: result.summary, hours: result.hours });
+      } catch (e) {
+        send({ type: "error", error: e instanceof Error ? e.message : String(e) });
+      } finally {
+        inFlight = null;
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      // Nginx and friends will buffer a stream into a single blob otherwise.
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

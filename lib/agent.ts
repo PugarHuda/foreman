@@ -141,13 +141,13 @@ async function dispatch(
   name: string,
   args: any,
   elapsedHours: number,
-  steps: AgentStep[],
+  record: (step: AgentStep) => void,
   deps: Required<AgentDeps>,
 ) {
   switch (name) {
     case "get_machine_health": {
       const { machine, health } = healthOf(args.machine_id, elapsedHours);
-      steps.push({
+      record({
         kind: "tool",
         label: `get_machine_health(${machine.tag})`,
         detail: `${health.currentRms.toFixed(2)} mm/s RMS, ISO zone ${health.zone}, RUL ${
@@ -181,7 +181,7 @@ async function dispatch(
         orderBookRead = false;
       }
 
-      steps.push({
+      record({
         kind: "tool",
         label: `check_inventory(${args.part_no})`,
         detail: `${onHand} on hand, ${orderBookRead ? onOrder : "?"} already on order — ${
@@ -222,7 +222,7 @@ async function dispatch(
         };
       });
 
-      steps.push({
+      record({
         kind: "tool",
         label: `get_supplier_quotes(${args.part_no})`,
         detail:
@@ -248,7 +248,7 @@ async function dispatch(
       // gives the model something it can act on instead of a raw revert.
       const known = getQuotes(args.part_no).map((q) => q.address.toLowerCase());
       if (!known.includes(String(args.supplier_address).toLowerCase())) {
-        steps.push({
+        record({
           kind: "tool",
           label: "create_purchase_order rejected",
           detail: `${args.supplier_address} is not a vetted supplier for ${args.part_no}`,
@@ -272,7 +272,7 @@ async function dispatch(
         args.amount_usd,
         health.rulHours ?? 0,
       );
-      steps.push({
+      record({
         kind: "action",
         label:
           po.status === "Funded"
@@ -331,6 +331,14 @@ export type ChatFn = (messages: unknown[], tools: unknown) => Promise<any>;
  */
 export interface AgentDeps {
   chat?: ChatFn;
+  /**
+   * Called as each step happens rather than after the run.
+   *
+   * A shift assessment takes twenty to forty seconds. Handing the operator a
+   * spinner for all of it and then a wall of text hides the one thing worth
+   * watching: the agent reasoning its way to a decision about money.
+   */
+  onStep?: (step: AgentStep) => void;
   readOrders?: () => Promise<{
     pos: readonly { partNo: string; status: string; supplier: string }[];
   }>;
@@ -393,9 +401,17 @@ export async function runAgent(
     chat: overrides.chat ?? veniceChat,
     readOrders: overrides.readOrders ?? getState,
     placeOrder: overrides.placeOrder ?? proposePO,
+    onStep: overrides.onStep ?? (() => {}),
   };
   const chat = deps.chat;
+
+  /* Recorded and forwarded in one move, so the caller sees the run unfold
+     rather than its transcript afterwards. */
   const steps: AgentStep[] = [];
+  const record = (step: AgentStep) => {
+    steps.push(step);
+    deps.onStep(step);
+  };
   const messages: any[] = [
     { role: "system", content: SYSTEM },
     {
@@ -415,7 +431,7 @@ export async function runAgent(
     // The final message is the summary and is returned separately — pushing it
     // as a step too would print it twice on the panel.
     if (msg.content?.trim() && calls.length > 0) {
-      steps.push({ kind: "thought", label: "agent", detail: msg.content.trim() });
+      record({ kind: "thought", label: "agent", detail: msg.content.trim() });
     }
 
     if (calls.length === 0) {
@@ -433,7 +449,7 @@ export async function runAgent(
           call.function.name,
           JSON.parse(call.function.arguments || "{}"),
           elapsedHours,
-          steps,
+          record,
           deps,
         );
       } catch (e) {
@@ -458,7 +474,7 @@ export async function runAgent(
         } else {
           result = { error: message };
         }
-        steps.push({ kind: "tool", label: `${call.function.name} failed`, detail: message });
+        record({ kind: "tool", label: `${call.function.name} failed`, detail: message });
       }
       messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
     }
