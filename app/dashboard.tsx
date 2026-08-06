@@ -49,6 +49,9 @@ const POST_HEADERS: Record<string, string> = {
 const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
+/** An unreadable figure is a dash, never a confident zero. */
+const cash = (n: number | undefined | null) => (n == null ? "—" : money(n));
+
 interface Machine {
   id: number;
   tag: string;
@@ -121,6 +124,8 @@ export default function Dashboard() {
   const [data, setData] = useState<State | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [summary, setSummary] = useState("");
+  /** The slider can move after a run; the log has to say what it looked at. */
+  const [ranAtHour, setRanAtHour] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Kept apart from action errors so neither wipes the other off screen. */
@@ -187,6 +192,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(out.error);
       setSteps(out.steps);
       setSummary(out.summary);
+      setRanAtHour(out.hours ?? hours);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -243,38 +249,45 @@ export default function Dashboard() {
       {loadError && <p className="error">{loadError}</p>}
       {data?.chainError && (
         <p className="error">
-          Contracts not reachable — run <code>node scripts/deploy.mjs</code> first.
-          {"\n"}
-          {data.chainError}
+          {/rate limit|429|timeout/i.test(data.chainError)
+            ? "The public RPC is rate limiting us, so the money figures above are not live. The orders themselves are safe on chain — wait a moment and reload."
+            : "Contracts not reachable — check the deployment, or run node scripts/deploy.mjs."}
+          {"\n\n"}
+          {data.chainError.split("\n")[0]}
         </p>
       )}
       {error && <p className="error">{error}</p>}
       {!data && !loadError && <p className="empty">Reading the line…</p>}
 
+      {/* When the chain cannot be read, these must not read as zero — a row of
+          $0 says the plant is broke, which is a very different claim from
+          "the figures could not be fetched". */}
       <section className="strip">
         <div>
           <div className="eyebrow">Plant treasury</div>
-          <div className="value">{money(chain?.availableUsd ?? 0)}</div>
+          <div className="value">{cash(chain?.availableUsd)}</div>
           <div className="sub">uncommitted USDC</div>
         </div>
         <div>
           <div className="eyebrow">In escrow</div>
-          <div className="value">{money(chain?.escrowedUsd ?? 0)}</div>
+          <div className="value">{cash(chain?.escrowedUsd)}</div>
           <div className="sub">committed to open orders</div>
         </div>
         <div>
           <div className="eyebrow">Agent budget left</div>
-          <div className="value">{money(chain?.remainingBudgetUsd ?? 0)}</div>
-          <div className="sub">of {money(chain?.monthlyCapUsd ?? 0)} per 30 days</div>
+          <div className="value">{cash(chain?.remainingBudgetUsd)}</div>
+          <div className="sub">
+            {chain ? `of ${money(chain.monthlyCapUsd)} per 30 days` : "per 30 days"}
+          </div>
         </div>
         <div>
           <div className="eyebrow">Signs alone up to</div>
-          <div className="value">{money(chain?.autoApproveMaxUsd ?? 0)}</div>
+          <div className="value">{cash(chain?.autoApproveMaxUsd)}</div>
           <div className="sub">above this, a human approves</div>
         </div>
         <div>
           <div className="eyebrow">Downtime bought back</div>
-          <div className="value">{money(data?.avoidedUsd ?? 0)}</div>
+          <div className="value">{cash(chain ? data?.avoidedUsd : undefined)}</div>
           <div className="sub">from orders now in flight</div>
         </div>
       </section>
@@ -363,7 +376,15 @@ export default function Dashboard() {
         <div className="stack">
           <section className="panel">
             <header>
-              <h2 style={{ fontSize: 13 }}>Agent</h2>
+              <h2 style={{ fontSize: 13 }}>
+                Agent
+                {ranAtHour !== null && (
+                  <span className="eyebrow" style={{ marginLeft: 8 }}>
+                    assessed run hour {ranAtHour}
+                    {ranAtHour !== hours ? " — the slider has moved since" : ""}
+                  </span>
+                )}
+              </h2>
               <button className="btn primary" onClick={runAgent} disabled={busy !== null}>
                 {busy === "agent" ? "Working…" : "Run agent"}
               </button>

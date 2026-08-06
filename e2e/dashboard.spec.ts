@@ -169,6 +169,33 @@ test.describe("wrong path — a broken backend says so", () => {
     await expect(page.locator(".error")).toBeVisible({ timeout: 15_000 });
   });
 
+  test("an unreadable chain shows dashes, never a confident zero", async ({ page }) => {
+    // The API is fine; the RPC behind it is rate limiting. This is what the
+    // panel actually did in front of a user — five tiles of $0.
+    await page.route("**/api/state**", async (route) => {
+      const body = await (await route.fetch()).json();
+      body.chain = null;
+      body.chainError = "RPC Request failed.\nDetails: over rate limit";
+      body.avoidedUsd = 0;
+      await route.fulfill({ json: body });
+    });
+    await page.goto("/");
+
+    const values = page.locator(".strip .value");
+    await expect(values.first()).toBeVisible();
+    const shown = await values.allTextContents();
+
+    expect(shown.every((v) => v.trim() === "—"), `tiles showed: ${shown.join(", ")}`).toBe(true);
+    await expect(page.locator(".error")).toContainText("rate limiting");
+  });
+
+  test("real figures still render when the chain is readable", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".strip .value").first()).toHaveText(/^\$[\d,]+$/, {
+      timeout: 15_000,
+    });
+  });
+
   test("an agent failure surfaces the reason", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator(".machine").first()).toBeVisible();

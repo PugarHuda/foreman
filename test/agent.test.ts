@@ -34,6 +34,12 @@ describe("agent loop", () => {
 
     assert.equal(run.summary, "Nothing needs ordering this shift.");
     assert.deepEqual(run.steps, [], "a closing message is the summary, not a step");
+    assert.equal(run.hours, 300, "the run must report the hour it assessed");
+  });
+
+  it("reports the hour it assessed, not the default", async () => {
+    const { chat } = scripted([reply("Nothing to do.")]);
+    assert.equal((await runAgent(276, chat)).hours, 276);
   });
 
   it("feeds tool results back to the model", async () => {

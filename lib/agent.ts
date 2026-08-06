@@ -38,6 +38,8 @@ export interface AgentStep {
 export interface AgentRun {
   steps: AgentStep[];
   summary: string;
+  /** The run hour this assessment was made at — the slider may have moved since. */
+  hours: number;
 }
 
 // --- tools the agent may call ---
@@ -324,7 +326,11 @@ export async function runAgent(
     }
 
     if (calls.length === 0) {
-      return { steps, summary: msg.content?.trim() || "No action taken." };
+      return {
+        steps,
+        summary: msg.content?.trim() || "No action taken.",
+        hours: elapsedHours,
+      };
     }
 
     for (const call of calls) {
@@ -364,6 +370,10 @@ export async function runAgent(
     }
   }
 
-  return { steps, summary: "Agent hit the turn limit without concluding." };
+  return {
+    steps,
+    summary: "Agent hit the turn limit without concluding.",
+    hours: elapsedHours,
+  };
 }
 

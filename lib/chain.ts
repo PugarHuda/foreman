@@ -30,9 +30,18 @@ const KEY_ENV: Record<Role, string> = {
 export const STATUS = ["None", "Proposed", "Funded", "Shipped", "Released", "Cancelled"] as const;
 export type StatusName = (typeof STATUS)[number];
 
+/**
+ * Reads go out as one multicall, not seven.
+ *
+ * getState() reads seven values, and the agent calls it again mid-run. Fired
+ * individually at a public RPC that is one eth_call per value, which is how
+ * the panel started coming back "over rate limit" — and a rate-limited read
+ * looks exactly like a plant with no money.
+ */
 export const publicClient = createPublicClient({
   chain: activeChain(),
-  transport: http(rpcUrl()),
+  transport: http(rpcUrl(), { retryCount: 3, retryDelay: 400, timeout: 20_000 }),
+  batch: { multicall: { wait: 16 } },
 });
 
 function walletFor(role: Role) {
