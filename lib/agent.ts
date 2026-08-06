@@ -338,16 +338,26 @@ export async function runAgent(
         );
       } catch (e) {
         const message = String(e instanceof Error ? e.message : e);
-        // A write that throws may still have landed — the failure could be in
-        // reading it back. Never invite a retry that double-spends.
-        result =
-          call.function.name === "create_purchase_order"
-            ? {
-                error: message,
-                retry: false,
-                note: "The transaction may already be on chain. Do not place this order again. Report the failure and stop.",
-              }
-            : { error: message };
+
+        if (message.includes("AlreadyOnOrder")) {
+          // Not a failure — the contract refusing a duplicate the agent
+          // should have caught itself. Say so plainly so it moves on.
+          result = {
+            error: "This machine already has an open order for that part.",
+            retry: false,
+            note: "The contract allows one open order per machine and part. Nothing was spent. Report it and take no further action on this machine.",
+          };
+        } else if (call.function.name === "create_purchase_order") {
+          // A write that throws may still have landed — the failure could be
+          // in reading it back. Never invite a retry that double-spends.
+          result = {
+            error: message,
+            retry: false,
+            note: "The transaction may already be on chain. Do not place this order again. Report the failure and stop.",
+          };
+        } else {
+          result = { error: message };
+        }
         steps.push({ kind: "tool", label: `${call.function.name} failed`, detail: message });
       }
       messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });

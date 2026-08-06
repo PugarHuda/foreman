@@ -29,21 +29,24 @@ nothing above $500 executes without a second key. A stranger hammering the
 button is bounded by the same contract the plant relies on — which is easier
 to show than to argue.
 
-| | |
-|---|---|
-| Foreman | [`0xd15bf5b95dc29083eba236057e2dc9de90092725`](https://sepolia.basescan.org/address/0xd15bf5b95dc29083eba236057e2dc9de90092725) |
-| USDC (mock) | [`0xa048d4f17282488b60d96e6fb01fbda106f38b8a`](https://sepolia.basescan.org/address/0xa048d4f17282488b60d96e6fb01fbda106f38b8a) |
+| | | |
+|---|---|---|
+| Foreman | [`0x011af865531c9f1e4300e78acd0901122b83c480`](https://sepolia.basescan.org/address/0x011af865531c9f1e4300e78acd0901122b83c480) | [read the verified source](https://base-sepolia.blockscout.com/address/0x011af865531c9f1e4300e78acd0901122b83c480#code) |
+| USDC (mock) | [`0x52759e09d3c70ca281c59da3122a7af8dfa51847`](https://sepolia.basescan.org/address/0x52759e09d3c70ca281c59da3122a7af8dfa51847) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0x52759e09d3c70ca281c59da3122a7af8dfa51847) |
+
+Both are verified, so the bytecode running on Base Sepolia can be checked
+against the source in this repo rather than taken on trust.
 
 **[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
 straight off the running app by `scripts/record-demo.mjs`.
 
 Those four transactions, which you can check yourself:
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xbab9ce88d4df901a42b8baab9eeef2ef1f3f4e9d2c20ff8d499046dc84d41d0e) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x5c435e0281d209b5bf30ef81c2a15498136918f7ab4569faa0f6492a7dd57142) — `Proposed` only. No `Funded` event, no money moved
-- [A human approves it](https://sepolia.basescan.org/tx/0x4fda1a82940ecb0c058251350edd68bf8462a26702863ae4d7479d4e188da93a) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
-- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0x3be275ece2945f555e0dd3596fc14c04d5665b31d69d804307811aad098ff413) — the `Shipped` event carries the document hash
-- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0x784546759b521760d8f35e92a5287853dd67afd2bed0d695c9aa58f0c4a516a7)
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xf634aff187c9430902945b26ad3f227fa74227e90cced24423ddecb8bb10048e) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0xf8e2d87b2d9c583a8016adfe14983489e5e0b82d82f4abcb05891772c4544f62) — `Proposed` only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0xfb3ce59cbda47434b866e1f8dc764518da58f02f09cc547f34bc7fbc7ba2cede) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0xcb0b573fcaf3db646084b039801821a34f4f6a11a4f432a0a943e24f87961ecb) — the `Shipped` event carries the document hash
+- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0x497a1d8509f87adf68167a62e4e91fd9c0eba3a135dffe3a81c7d3b0260c7520)
 
 The split across two transactions is the whole argument. One key can commit
 routine money; the other is required for anything that is not routine.
@@ -99,7 +102,7 @@ approval queue.
 | Guarantee | How |
 |---|---|
 | Agent cannot invent a payee | `approvedSupplier` allowlist; only the plant may add to it. A hallucinated or injected address is rejected at the contract, not by a prompt |
-| Agent cannot re-buy what is already coming | `check_inventory` reports on-hand **plus on order**; the agent orders only when both are zero. Without this it re-bought the same bearing on every run |
+| Agent cannot re-buy what is already coming | Two layers: `check_inventory` reports on-hand **plus on order** so the agent decides correctly, and `proposePO` reverts with `AlreadyOnOrder` if that machine already has an open order for that part. A guarantee that lives only in application memory is not a guarantee |
 | Agent cannot overspend | `monthlyCap` per 30-day window, checked on every autonomous fund |
 | Agent cannot make large commitments alone | `autoApproveMax`; above it the PO sits in `Proposed` |
 | A human is never blocked by the agent's budget | `approvePO` bypasses the cap — the cap bounds the agent, not the plant |
@@ -136,6 +139,10 @@ CHAIN=local npm run dev
 ```
 
 ### Driving the demo
+
+Two minutes, two button presses — [docs/demo-script.md](docs/demo-script.md)
+has the walkthrough, the three questions this always gets asked, and what to
+do if the venue wifi dies.
 
 **Run hour 300 — the routine lane.** CNC-07 sits at 3.89 mm/s, zone B, 58.4 h
 of life left, zero bearings on the shelf. Press **Run agent**. It checks all

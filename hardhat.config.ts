@@ -15,6 +15,13 @@ const config: HardhatUserConfig = {
       accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
     },
   },
+  // Sourcify and Blockscout need no API key, so anyone cloning this can
+  // verify their own deployment without signing up for anything.
+  verify: {
+    sourcify: { enabled: true },
+    blockscout: { enabled: true },
+    etherscan: { apiKey: process.env.ETHERSCAN_API_KEY ?? "" },
+  },
 };
 
 export default config;

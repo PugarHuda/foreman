@@ -66,6 +66,15 @@ contract Foreman {
      */
     mapping(address => bool) public approvedSupplier;
 
+    /**
+     * One open order per machine and part. An agent that runs twice — because
+     * a request was retried, or two operators pressed at once, or it simply
+     * misread its own order book — cannot open a second order for a bearing
+     * already on its way. The application checks this too, but a guarantee
+     * that lives only in application memory is not a guarantee.
+     */
+    mapping(bytes32 => bool) private _openLine;
+
     PO[] private _pos;
 
     event PolicySet(address agent, uint128 monthlyCap, uint128 autoApproveMax);
@@ -87,6 +96,7 @@ contract Foreman {
     error SupplierNotApproved();
     error NoDeliveryRef();
     error DeliveryRefMismatch();
+    error AlreadyOnOrder();
     error CapExceeded();
     error Underfunded();
     error TooEarly();
@@ -155,6 +165,10 @@ contract Foreman {
         if (msg.sender != agent) revert NotAgent();
         if (!approvedSupplier[supplier]) revert SupplierNotApproved();
         if (amount == 0) revert BadAmount();
+
+        bytes32 line = _lineKey(machineId, partNo);
+        if (_openLine[line]) revert AlreadyOnOrder();
+        _openLine[line] = true;
 
         id = _pos.length;
         _pos.push(
@@ -245,11 +259,17 @@ contract Foreman {
         _release(id, po);
     }
 
+    /// @dev Identifies a machine-and-part line, which may hold one open order.
+    function _lineKey(uint32 machineId, string memory partNo) private pure returns (bytes32) {
+        return keccak256(abi.encode(machineId, partNo));
+    }
+
     function _release(uint256 id, PO storage po) private {
         uint128 amount = po.amount;
         address supplier = po.supplier;
         po.status = Status.Released;
         po.since = uint40(block.timestamp);
+        _openLine[_lineKey(po.machineId, po.partNo)] = false;
         escrowed -= amount;
         token.safeTransfer(supplier, amount);
         emit Released(id, supplier, amount);
@@ -278,6 +298,7 @@ contract Foreman {
         }
         po.status = Status.Cancelled;
         po.since = uint40(block.timestamp);
+        _openLine[_lineKey(po.machineId, po.partNo)] = false;
         emit Cancelled(id, refunded);
     }
 
@@ -285,6 +306,11 @@ contract Foreman {
 
     function poCount() external view returns (uint256) {
         return _pos.length;
+    }
+
+    /// @notice Whether this machine already has an order open for this part.
+    function isOnOrder(uint32 machineId, string calldata partNo) external view returns (bool) {
+        return _openLine[_lineKey(machineId, partNo)];
     }
 
     function getPO(uint256 id) external view returns (PO memory) {

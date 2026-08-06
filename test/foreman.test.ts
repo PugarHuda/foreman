@@ -272,6 +272,55 @@ describe("Foreman", () => {
     );
   });
 
+  it("refuses a second open order for the same machine and part", async () => {
+    const { plant, agent, supplier, foreman } = await deploy();
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    assert.equal(await foreman.read.isOnOrder([7, "6205-2RS"]), true);
+
+    // The agent misreading its own order book must not cost the plant twice.
+    await expectRevert(
+      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+        account: agent.account,
+      }),
+      "AlreadyOnOrder",
+    );
+
+    // A different part on the same machine is a different line.
+    await foreman.write.proposePO([7, "SPN-880", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    // So is the same part on a different machine.
+    await foreman.write.proposePO([11, "6205-2RS", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    assert.equal(await foreman.read.poCount(), 3n);
+  });
+
+  it("reopens the line once the order is settled or dropped", async () => {
+    const { plant, agent, supplier, foreman } = await deploy();
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    await foreman.write.markShipped([0n, REF], { account: supplier.account });
+    await foreman.write.confirmReceipt([0n, REF], { account: plant.account });
+    assert.equal(await foreman.read.isOnOrder([7, "6205-2RS"]), false, "delivered frees the line");
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    await foreman.write.cancelPO([1n], { account: plant.account });
+    assert.equal(await foreman.read.isOnOrder([7, "6205-2RS"]), false, "cancelled frees the line");
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180)], {
+      account: agent.account,
+    });
+    assert.equal(await foreman.read.poCount(), 3n);
+  });
+
   it("will not pay an address the plant never vetted", async () => {
     const { plant, agent, supplier, outsider, foreman } = await deploy();
 
