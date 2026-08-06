@@ -9,6 +9,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { chromium } from "@playwright/test";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
@@ -139,12 +140,35 @@ const webm = fs
   .map((f) => ({ f, t: fs.statSync(path.join(OUT, f)).mtimeMs }))
   .sort((a, b) => b.t - a.t)[0];
 
-if (webm) {
-  const target = path.join(OUT, "demo.webm");
+if (!webm) process.exit(0);
+
+const target = path.join(OUT, "demo.webm");
+const raw = path.join(OUT, webm.f);
+const rawMb = (fs.statSync(raw).size / 1e6).toFixed(1);
+
+/**
+ * Compress before committing. Playwright writes a near-lossless VP8 stream —
+ * fine to watch, but this file is re-recorded on every contract change, and
+ * each copy stays in git history forever. Eight of them had already put 90 MB
+ * in .git before anyone looked.
+ */
+try {
+  const tmp = path.join(OUT, "demo.compressed.webm");
+  execFileSync(
+    "ffmpeg",
+    ["-y", "-i", raw, "-c:v", "libvpx-vp9", "-crf", "40", "-b:v", "0", "-an", tmp],
+    { stdio: "ignore" },
+  );
+  fs.rmSync(target, { force: true });
+  fs.renameSync(tmp, target);
+  fs.rmSync(raw, { force: true });
+  const mb = (fs.statSync(target).size / 1e6).toFixed(1);
+  console.log(`\nwrote ${target} (${mb} MB, down from ${rawMb} MB)`);
+} catch {
+  // No ffmpeg: keep the raw file rather than losing the recording.
   if (webm.f !== "demo.webm") {
     fs.rmSync(target, { force: true });
-    fs.renameSync(path.join(OUT, webm.f), target);
+    fs.renameSync(raw, target);
   }
-  const mb = (fs.statSync(target).size / 1e6).toFixed(1);
-  console.log(`\nwrote ${target} (${mb} MB)`);
+  console.log(`\nwrote ${target} (${rawMb} MB — install ffmpeg to compress it)`);
 }

@@ -515,18 +515,25 @@ export default function Dashboard() {
           <section className="panel">
             <header>
               <h2 style={{ fontSize: 13 }}>Purchase orders</h2>
-              {chain && data?.explorer ? (
-                <a
-                  className="eyebrow"
-                  href={`${data.explorer}/address/${chain.foreman}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  on chain ↗
-                </a>
-              ) : (
-                <span className="eyebrow">on chain</span>
-              )}
+              <span style={{ display: "flex", gap: 12 }}>
+                {chain && (
+                  <a className="eyebrow" href="/api/audit" download>
+                    export ↓
+                  </a>
+                )}
+                {chain && data?.explorer ? (
+                  <a
+                    className="eyebrow"
+                    href={`${data.explorer}/address/${chain.foreman}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    on chain ↗
+                  </a>
+                ) : (
+                  <span className="eyebrow">on chain</span>
+                )}
+              </span>
             </header>
             <div className="body">
               {live.length === 0 && done.length === 0 && (

@@ -114,6 +114,7 @@ approval queue.
 | Supplier cannot be stiffed | `claimAfterTimeout` after 14 days from shipping |
 | Plant cannot be stiffed | escrow only releases on `confirmReceipt` or that timeout |
 | A forgotten decision cannot block a line for good | An open order blocks its machine-and-part line; `expireProposal` lets anyone clear one nobody answered after 7 days. A proposal holds no escrow, so there is nothing to steal by expiring it |
+| The audit trail is checkable, not just printable | `/api/audit` exports the order book as CSV, every row naming the contract it came from. An auditor can re-derive any line from a block explorer instead of trusting the file |
 | Supplier reliability is derived, not maintained | `supplierRecords` reads delivered-versus-cancelled straight off the order book. Nobody keeps the scorecard, so nobody can quietly revise it, and a plant switching systems carries it with them |
 | The panel is readable, not just tidy | Every text tier clears WCAG AA on every surface it lands on, checked in `test/contrast.test.ts`. The old third tier sat at 2.8:1 while carrying machine names, status badges and the ISO zone labels |
 | A cancelled order does not burn the month | `cancelPO` refunds budget and escrow |

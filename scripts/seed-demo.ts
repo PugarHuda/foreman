@@ -21,10 +21,22 @@ import {
 } from "../lib/chain.ts";
 
 const cnc = MACHINES[0];
+if (!cnc?.escalationPart) {
+  throw new Error(`${cnc?.tag ?? "the first machine"} has no escalation part to queue for a human`);
+}
 const bearing = getQuotes(cnc.criticalPart)[0];
-const spindle = getQuotes(cnc.escalationPart!)[0];
+const spindle = getQuotes(cnc.escalationPart)[0];
 
-const before = await getState();
+if (!bearing || !spindle) {
+  throw new Error("no vetted supplier for one of the parts — has the deploy run?");
+}
+
+const before = await getState().catch((e) => {
+  throw new Error(
+    `cannot read the contract (${e instanceof Error ? e.message.split("\n")[0] : e}). ` +
+      `Deploy first, and check CHAIN matches the chain you deployed to.`,
+  );
+});
 if (before.pos.length > 0) {
   console.log(`${before.pos.length} order(s) already on this deployment — nothing to seed.`);
   process.exit(0);

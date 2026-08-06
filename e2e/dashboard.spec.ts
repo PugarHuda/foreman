@@ -122,6 +122,25 @@ test.describe("happy path — the control room reads correctly", () => {
     await expect(page.getByText("#1 6205-2RS")).toBeVisible();
   });
 
+  test("exports the order book as something an auditor can open", async ({ request }) => {
+    const res = await request.get("/api/audit");
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("text/csv");
+    expect(res.headers()["content-disposition"]).toMatch(/attachment; filename="foreman-orders-/);
+
+    const [header, ...rows] = (await res.text()).trim().split("\n");
+    expect(header).toBe(
+      "order_id,machine,part,supplier,amount_usd,status,signed_by,rul_hours_at_order,waybill,contract,explorer",
+    );
+
+    // Every row must name the contract it came from, or the file is just a
+    // report and nobody can check it against the chain.
+    for (const row of rows) {
+      expect(row).toMatch(/0x[0-9a-fA-F]{40}/);
+      expect(row.split(",").length).toBeGreaterThanOrEqual(11);
+    }
+  });
+
   test("keeps the page usable at phone width", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator(".wordmark")).toBeVisible();
