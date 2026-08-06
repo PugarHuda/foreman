@@ -349,6 +349,7 @@ contract Foreman {
      * how the line gets blocked in the first place.
      */
     function expireProposal(uint256 id) external {
+        if (id >= _pos.length) revert BadStatus();
         PO storage po = _pos[id];
         if (po.status != Status.Proposed) revert BadStatus();
         if (block.timestamp < po.since + PROPOSAL_TTL) revert TooEarly();

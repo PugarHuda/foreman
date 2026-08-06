@@ -31,8 +31,8 @@ to show than to argue.
 
 | | | |
 |---|---|---|
-| Foreman | [`0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f`](https://sepolia.basescan.org/address/0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f) | [read the verified source](https://base-sepolia.blockscout.com/address/0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f#code) |
-| USDC (mock) | [`0x2ae3a667aa70d23a365eb8310656d06b7c30183e`](https://sepolia.basescan.org/address/0x2ae3a667aa70d23a365eb8310656d06b7c30183e) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f) |
+| Foreman | [`0xf099f039f8206c4c2bf91120a913a1f138fbafcb`](https://sepolia.basescan.org/address/0xf099f039f8206c4c2bf91120a913a1f138fbafcb) | [read the verified source](https://base-sepolia.blockscout.com/address/0xf099f039f8206c4c2bf91120a913a1f138fbafcb#code) |
+| USDC (mock) | [`0x0cb5fb887e214c310a80076f562dac08510626ef`](https://sepolia.basescan.org/address/0x0cb5fb887e214c310a80076f562dac08510626ef) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0xf099f039f8206c4c2bf91120a913a1f138fbafcb) |
 
 Both are verified, so the bytecode running on Base Sepolia can be checked
 against the source in this repo rather than taken on trust.
@@ -42,12 +42,12 @@ straight off the running app by `scripts/record-demo.mjs`.
 
 The transactions behind it, which you can check yourself:
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xfab8a0ba0c227b009ae6e53a23c4552f5538616410d27cc34021d907a91011f5) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x51a039ef934f5965fdd1dced46b5070afe208b9fa97dfbc7ec1590359070f235) — `Proposed` only. No `Funded` event, no money moved
-- [A human approves it](https://sepolia.basescan.org/tx/0xe054354f18894d7264c333cf6dadcde3b2fc0c3bb8c14ea9d4e8379651a0427c) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
-- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0x01b87fce28f065c7466031ee04fe362056f4294a6974b56799f14a3f28386e27) — the `Shipped` event carries the document hash
-- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0xff8bbe9f77a3044558d4fcef8fdc13c80f84e99fc490993475437057319835b2)
-- [The part is issued to the machine](https://sepolia.basescan.org/tx/0x02756896ff8e1129b977cd308cedb6ac71d3254a0ecfb088b0e15af4d155f1fb) — it leaves the store, and [the agent orders the next one](https://sepolia.basescan.org/tx/0xee83a31a1fa33f0de0c3fcaa8b16cc020581a8569e976c8b7d790d661afa2dff)
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xe862ef05540bb79b0f270d7352c34394d010ebd8dc863320e621f2a2f7d273fc) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x1233687349dab3875950c1daf9efe46c64168a0a9f2033143866fd0ec100878e) — `Proposed` only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0x7d3efed03acec98218f8037370b262bfcdc9fed6462bfb30e401395429dca55b) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0x9e308b2a0aa61e4656589d9ca62c1ebf79e52ab34c1b7de3b98fedb48904b274) — the `Shipped` event carries the document hash
+- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0x37b4d841277c7c15a6781b7d97db3db33487fb1fe88ae7790289b7cb3719d3af)
+- [The part is issued to the machine](https://sepolia.basescan.org/tx/0x4cb06822ac45b6fd2c05bf1f1b75f1d4721694b5dee46937b4bdb78b2974c5d1) — it leaves the store, and [the agent orders the next one](https://sepolia.basescan.org/tx/0xee83a31a1fa33f0de0c3fcaa8b16cc020581a8569e976c8b7d790d661afa2dff)
 
 The split across two transactions is the whole argument. One key can commit
 routine money; the other is required for anything that is not routine.
@@ -114,6 +114,7 @@ approval queue.
 | Supplier cannot be stiffed | `claimAfterTimeout` after 14 days from shipping |
 | Plant cannot be stiffed | escrow only releases on `confirmReceipt` or that timeout |
 | A forgotten decision cannot block a line for good | An open order blocks its machine-and-part line; `expireProposal` lets anyone clear one nobody answered after 7 days. A proposal holds no escrow, so there is nothing to steal by expiring it |
+| The panel is readable, not just tidy | Every text tier clears WCAG AA on every surface it lands on, checked in `test/contrast.test.ts`. The old third tier sat at 2.8:1 while carrying machine names, status badges and the ISO zone labels |
 | A cancelled order does not burn the month | `cancelPO` refunds budget and escrow |
 
 ## Run it
@@ -183,7 +184,7 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 55 contract + unit tests, in-process EVM, no node needed
+npm test          # 59 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 29 browser tests, against localhost or a deployed instance
 ```
 

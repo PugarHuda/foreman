@@ -9,9 +9,13 @@
   --panel: #14181d;
   --panel-hi: #1b2027;
   --rule: #262e36;
+  /* Three tiers, all of them readable. The old --dim sat at 2.8:1 on panel,
+     well under AA, and it carried machine names, status badges and the ISO
+     zone labels — the smallest text on the panel was also the faintest. On a
+     projector at the back of a room that is not a subtlety, it is a blank. */
   --ink: #e6ebf0;
-  --muted: #7f8c99;
-  --dim: #55606b;
+  --muted: #9aa7b3;
+  --dim: #7d8893;
 
   --zone-a: #3fb27f;
   --zone-b: #c2cc4a;
@@ -89,13 +93,13 @@ a {
 
 .tagline {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   flex: 1;
   min-width: 220px;
 }
 
 .eyebrow {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--dim);
@@ -125,7 +129,7 @@ a {
 
 .strip .sub {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 2px;
 }
 
@@ -204,7 +208,7 @@ a {
 
 .machine .name {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -225,7 +229,7 @@ a {
 }
 
 .reading .unit {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dim);
 }
 
@@ -260,7 +264,7 @@ a {
   display: flex;
   justify-content: space-between;
   margin-top: 5px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--dim);
 }
 
@@ -310,7 +314,7 @@ a {
 
 .step .mark {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -366,12 +370,12 @@ a {
 }
 
 .po .meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dim);
 }
 
 .badge {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   border: 1px solid var(--rule);

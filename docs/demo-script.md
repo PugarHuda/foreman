@@ -116,9 +116,10 @@ function, `waybillFor` — the contract does not change.
 
 ## If something breaks
 
-- **Agent errors out** → the panel shows the reason. Say "that is the model
-  provider, not the contract" and click the transaction links instead; the
-  four in the README tell the same story.
+- **Agent errors out** → it already tried four models before giving up, so this
+  is Venice being down rather than one model being busy. The panel shows the
+  reason. Say "that is the model provider, not the contract" and click the
+  transaction links instead; the ones in the README tell the same story.
 - **Panel shows "Cannot read the line"** → RPC hiccup. Reload. The orders are
   on chain, not in the page.
 - **No network at all** → `npx hardhat node`, then `CHAIN=local npm run deploy`
@@ -132,7 +133,7 @@ function, `waybillFor` — the contract does not change.
 | | |
 |---|---|
 | Contract | ~250 lines of code, verified on Blockscout and Sourcify |
-| Test suite | 55 contract + unit (offline), 29 browser |
+| Test suite | 59 contract + unit (offline), 29 browser |
 | Agent budget | $2,000 per 30 days, $500 per order without a human |
 | CNC-07 downtime | $890/hour |
 | Bearing | $180, 36h lead · Spindle $4,000, 120h lead |

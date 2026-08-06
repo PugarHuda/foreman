@@ -304,25 +304,46 @@ export interface AgentDeps {
   ) => Promise<{ hash: string; id: number; status: string }>;
 }
 
+/**
+ * Models to try, in order. One model was a single point of failure on
+ * somebody else's infrastructure: if it is busy, rate limited or retired on
+ * the morning of a demo, the only button that tells the story stops working.
+ * Set VENICE_MODEL to pin the first choice; the rest are the fallback.
+ */
+const MODEL_FALLBACKS = ["zai-org-glm-5-2", "claude-opus-5", "qwen-3-8-max", "deepseek-v4-pro"];
+
+/** A model that is missing or busy is worth retrying elsewhere; a bad key is not. */
+const worthFallingBack = (status: number) => status !== 401 && status !== 403;
+
 const veniceChat: ChatFn = async (messages, tools) => {
   const apiKey = process.env.VENICE_API_KEY;
   if (!apiKey) throw new Error("VENICE_API_KEY missing from .env");
 
-  const res = await fetch(VENICE_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.VENICE_MODEL || "claude-opus-5",
-      messages,
-      tools,
-      temperature: 0.2,
-    }),
-  });
-  if (!res.ok) throw new Error(`Venice ${res.status}: ${await res.text()}`);
+  const preferred = process.env.VENICE_MODEL;
+  const models = preferred
+    ? [preferred, ...MODEL_FALLBACKS.filter((m) => m !== preferred)]
+    : MODEL_FALLBACKS;
 
-  const msg = (await res.json()).choices?.[0]?.message;
-  if (!msg) throw new Error("Venice returned no message");
-  return msg;
+  let last = "";
+  for (const model of models) {
+    const res = await fetch(VENICE_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages, tools, temperature: 0.2 }),
+    });
+
+    if (res.ok) {
+      const msg = (await res.json()).choices?.[0]?.message;
+      if (msg) return msg;
+      last = `${model}: no message in response`;
+      continue;
+    }
+
+    last = `${model}: ${res.status} ${(await res.text()).slice(0, 160)}`;
+    if (!worthFallingBack(res.status)) break;
+  }
+
+  throw new Error(`No model answered. Last: ${last}`);
 };
 
 export async function runAgent(
