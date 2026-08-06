@@ -19,6 +19,7 @@ import { FOREMAN_ADDRESS, FOREMAN_ABI, EXPLORER } from "./deployment.ts";
 import { activeChain, rpcUrl } from "./chains.ts";
 
 export type Role = "plant" | "agent" | "supplierA" | "supplierB";
+export type { Address };
 
 const KEY_ENV: Record<Role, string> = {
   plant: "DEPLOYER_KEY",

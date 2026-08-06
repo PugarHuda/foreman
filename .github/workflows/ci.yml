@@ -32,6 +32,7 @@ jobs:
           npx hardhat node &
           npx wait-on tcp:8545 -t 60000
           CHAIN=local npm run deploy
+          CHAIN=local npm run seed
         env:
           CHAIN: local
 

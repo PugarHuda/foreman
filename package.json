@@ -15,7 +15,8 @@
     "test": "hardhat test",
     "test:e2e": "playwright test",
     "keys": "node scripts/keys.mjs",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "seed": "node --env-file=.env scripts/seed-demo.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
