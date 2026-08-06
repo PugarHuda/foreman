@@ -17,6 +17,44 @@ const VIEWPORT = { width: 1600, height: 1100 };
 
 const beat = (s) => new Promise((r) => setTimeout(r, s * 1000));
 
+/**
+ * Clear the board first. The agent correctly refuses to buy a part that is
+ * already on order, so recording against a used deployment captures it
+ * declining — which is right, and useless as a demo. Cancel anything still in
+ * flight, fit anything delivered, and start from nothing.
+ */
+async function resetBoard() {
+  const secret = fs.existsSync(".env")
+    ? fs.readFileSync(".env", "utf8").match(/^DEMO_SECRET=(.+)$/m)?.[1]?.trim()
+    : undefined;
+  const headers = {
+    "Content-Type": "application/json",
+    ...(secret ? { "x-demo-secret": secret } : {}),
+  };
+
+  const { chain } = await (await fetch(`${BASE}/api/state`)).json();
+  const open = (chain?.pos ?? []).filter((p) =>
+    ["Proposed", "Funded", "Shipped", "Released"].includes(p.status),
+  );
+  if (!open.length) return;
+
+  say(`clearing ${open.length} order(s) left from a previous run`);
+  for (const po of open) {
+    const action = po.status === "Released" ? "fit" : "cancel";
+    const res = await fetch(`${BASE}/api/po`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ action, id: po.id }),
+    });
+    if (!res.ok) console.warn(`    could not ${action} #${po.id}: ${res.status}`);
+  }
+  await beat(5); // let the reads catch up before the browser opens
+}
+
+const say = (msg) => console.log(`  ${msg}`);
+
+await resetBoard();
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
   viewport: VIEWPORT,
@@ -24,8 +62,6 @@ const context = await browser.newContext({
   deviceScaleFactor: 1,
 });
 const page = await context.newPage();
-
-const say = (msg) => console.log(`  ${msg}`);
 
 try {
   say("opening the control room");

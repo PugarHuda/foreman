@@ -17,6 +17,8 @@ import {
   getStock,
   onOrderCount,
   stockOnHand,
+  supplierRecords,
+  type SupplierRecord,
 } from "./plant.ts";
 import { proposePO, getState } from "./chain.ts";
 
@@ -199,12 +201,47 @@ async function dispatch(
     }
     case "get_supplier_quotes": {
       const quotes = getQuotes(args.part_no);
+
+      // Price and lead time are what a supplier promises. Delivery history is
+      // what they have actually done, and it is already on chain.
+      let records: SupplierRecord[] = [];
+      try {
+        const { pos } = await deps.readOrders();
+        records = supplierRecords(pos, quotes);
+      } catch {
+        /* No history is not the same as a bad record — say nothing. */
+      }
+
+      const withHistory = quotes.map((q) => {
+        const r = records.find((x) => x.supplier === q.supplier);
+        return {
+          ...q,
+          delivered_before: r?.delivered ?? null,
+          cancelled_before: r?.cancelled ?? null,
+          reliability: r?.reliability ?? null,
+        };
+      });
+
       steps.push({
         kind: "tool",
         label: `get_supplier_quotes(${args.part_no})`,
-        detail: quotes.map((q) => `${q.supplier} $${q.priceUsd} / ${q.leadTimeHours}h`).join(" · ") || "none",
+        detail:
+          withHistory
+            .map((q) => {
+              const settled = (q.delivered_before ?? 0) + (q.cancelled_before ?? 0);
+              // Too little history is not the same as a bad record.
+              const rate =
+                q.reliability !== null
+                  ? `${Math.round(q.reliability * 100)}% delivered over ${settled}`
+                  : settled > 0
+                    ? `${q.delivered_before} of ${settled} delivered, too few to rate`
+                    : "nothing settled yet";
+              return `${q.supplier} $${q.priceUsd} / ${q.leadTimeHours}h · ${rate}`;
+            })
+            .join("\n") || "none",
       });
-      return { part_no: args.part_no, quotes };
+
+      return { part_no: args.part_no, quotes: withHistory };
     }
     case "create_purchase_order": {
       // The contract rejects an unvetted payee anyway. Catching it here just
@@ -274,7 +311,7 @@ Work through three separate decisions in order. Do not merge them.
    - projected RUL is inside planning_horizon_hours.
    A part already on its way covers the machine just as well as one on the shelf. If "covered" is above zero, say so and order nothing. If the failure is beyond the horizon, say so and order nothing. Otherwise do not wait for the last possible moment: waiting never makes the part cheaper, and a lead time that slips costs a shift.
 
-3. WHICH SUPPLIER? Among suppliers whose lead time is shorter than the RUL, take the cheapest. If none can beat the RUL, take the fastest and say plainly that the part will land late.
+3. WHICH SUPPLIER? Among suppliers whose lead time is shorter than the RUL, take the cheapest — unless one of them has a reliability on record below 0.7, in which case prefer the next cheapest that does not and say why. Price and lead time are what a supplier promises; delivered_before and reliability are what they have actually done. A null reliability means too little history to judge, not a bad one. If no supplier can beat the RUL, take the fastest and say plainly that the part will land late.
 
 Also:
 - Never trust a trend with r² below 0.7. Report it and take no action on that machine.
@@ -294,7 +331,9 @@ export type ChatFn = (messages: unknown[], tools: unknown) => Promise<any>;
  */
 export interface AgentDeps {
   chat?: ChatFn;
-  readOrders?: () => Promise<{ pos: readonly { partNo: string; status: string }[] }>;
+  readOrders?: () => Promise<{
+    pos: readonly { partNo: string; status: string; supplier: string }[];
+  }>;
   placeOrder?: (
     machineId: number,
     partNo: string,

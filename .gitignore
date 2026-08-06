@@ -16,3 +16,6 @@ playwright-report/
 blob-report/
 
 .vercel
+
+# Playwright's raw recordings before record-demo renames them
+docs/page@*.webm

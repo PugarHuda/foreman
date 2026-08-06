@@ -65,6 +65,56 @@ describe("stock coverage", () => {
   });
 });
 
+describe("supplier record", () => {
+  const quotes = [
+    { supplier: "Reliable Ltd", address: "0xaaa" as `0x${string}`, priceUsd: 100, leadTimeHours: 24 },
+    { supplier: "Flaky Ltd", address: "0xbbb" as `0x${string}`, priceUsd: 90, leadTimeHours: 24 },
+  ];
+  const order = (address: string, status: string) => ({ supplier: address, status, partNo: "x" });
+
+  it("says nothing until there is a pattern", async () => {
+    const { supplierRecords } = await import("../lib/plant.ts");
+    const [reliable] = supplierRecords([order("0xaaa", "Released")], quotes);
+
+    assert.equal(reliable.delivered, 1);
+    assert.equal(reliable.reliability, null, "one order is an anecdote, not a rating");
+  });
+
+  it("rates a supplier once enough orders have settled", async () => {
+    const { supplierRecords } = await import("../lib/plant.ts");
+    const pos = [
+      order("0xaaa", "Released"),
+      order("0xaaa", "Fitted"),
+      order("0xaaa", "Released"),
+      order("0xbbb", "Cancelled"),
+      order("0xbbb", "Cancelled"),
+      order("0xbbb", "Released"),
+    ];
+    const [reliable, flaky] = supplierRecords(pos, quotes);
+
+    assert.equal(reliable.reliability, 1, "a fitted part counts as delivered");
+    assert.equal(flaky.reliability, 1 / 3);
+  });
+
+  it("ignores orders still in flight", async () => {
+    const { supplierRecords } = await import("../lib/plant.ts");
+    const pos = [order("0xaaa", "Funded"), order("0xaaa", "Shipped"), order("0xaaa", "Proposed")];
+    const [reliable] = supplierRecords(pos, quotes);
+
+    assert.equal(reliable.delivered, 0);
+    assert.equal(reliable.reliability, null, "nothing has settled, so nothing is known");
+  });
+
+  it("does not credit one supplier with another's history", async () => {
+    const { supplierRecords } = await import("../lib/plant.ts");
+    const pos = [order("0xAAA", "Released"), order("0xaaa", "Released"), order("0xaaa", "Released")];
+    const [reliable, flaky] = supplierRecords(pos, quotes);
+
+    assert.equal(reliable.delivered, 3, "address comparison must ignore case");
+    assert.equal(flaky.delivered, 0);
+  });
+});
+
 describe("delivery reference", () => {
   it("is not guessable from the order id alone", async () => {
     const { waybillFor } = await import("../lib/plant.ts");

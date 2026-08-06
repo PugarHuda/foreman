@@ -57,7 +57,14 @@ export const MACHINES: Machine[] = [
     criticalPart: "HYD-SEAL-88",
     downtimeCostPerHour: 1450,
     seed: 11,
-    onsetHours: 1e9, // healthy through the demo window
+    /**
+     * Degrading, but slowly and late. Its trend is trustworthy and its failure
+     * is real — it is simply beyond the planning horizon, which is the one
+     * rule nothing else in the demo demonstrates. Without it the only reason
+     * the agent ever declines is noisy telemetry, which reads as the agent
+     * only knowing one trick.
+     */
+    onsetHours: 250,
   },
   {
     id: 11,
@@ -141,6 +148,41 @@ export function waybillFor(poId: number): string {
     h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
   }
   return `WB-${String(poId).padStart(4, "0")}-${h.toString(36).toUpperCase().padStart(7, "0")}`;
+}
+
+export interface SupplierRecord {
+  supplier: string;
+  delivered: number;
+  cancelled: number;
+  /** 0..1, or null when there is not enough history to say anything. */
+  reliability: number | null;
+}
+
+/**
+ * Supplier reliability, derived from the order book rather than maintained.
+ *
+ * Every despatch and every settlement is already on chain, so how a supplier
+ * has actually performed is a query, not a spreadsheet somebody updates and
+ * nobody trusts. A plant switching suppliers can carry this record with it;
+ * the supplier cannot quietly revise it.
+ */
+export function supplierRecords(
+  pos: readonly { supplier: string; status: string }[],
+  quotes: readonly Quote[],
+): SupplierRecord[] {
+  return quotes.map((q) => {
+    const theirs = pos.filter((p) => p.supplier.toLowerCase() === q.address.toLowerCase());
+    const delivered = theirs.filter((p) => p.status === "Released" || p.status === "Fitted").length;
+    const cancelled = theirs.filter((p) => p.status === "Cancelled").length;
+    const settled = delivered + cancelled;
+    return {
+      supplier: q.supplier,
+      delivered,
+      cancelled,
+      // One order is an anecdote. Say nothing until there is a pattern.
+      reliability: settled >= 3 ? delivered / settled : null,
+    };
+  });
 }
 
 /** An order still on its way to the plant. Cancelled and Released are done. */

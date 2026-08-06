@@ -18,8 +18,16 @@ so the panel is loaded when you need it.
 > Industrial 4.0 automated the data. It left the decision-to-cash loop manual.
 > This closes it.
 
-Point at **CNC-07**: 3.89 mm/s, ISO zone B, 58 hours to the stop threshold,
-$890 an hour if it stops. The other two machines are flat.
+Point at the three machines. They are not the same problem:
+
+- **CNC-07** — 3.89 mm/s, 58 hours left, trend confidence 0.96. Inside the
+  72-hour planning horizon.
+- **PRESS-02** — also degrading, also trustworthy at 0.97, but 86 hours out.
+  Beyond the horizon, so it waits.
+- **CONV-11** — flat, and its trend confidence is 0.01. That is noise, not
+  health, and the agent will say so rather than act on it.
+
+> Three machines, three different answers. Only one of them is "buy something".
 
 ## Press one — the routine lane (40 seconds)
 

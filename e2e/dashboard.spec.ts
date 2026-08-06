@@ -30,12 +30,19 @@ test.describe("happy path — the control room reads correctly", () => {
     await expect(page.locator(".machine .rms").first()).toHaveText(/^\d+\.\d{2}$/);
   });
 
-  test("projects a failure for the degrading machine and none for the healthy ones", async ({
-    page,
-  }) => {
+  test("tells the three machines apart rather than treating them alike", async ({ page }) => {
+    // The line is deliberately not one degrading machine and two dead ones:
+    // urgent, real-but-distant, and untrustworthy are three different answers.
+    const rul = async (n: number) => {
+      const text = (await page.locator(".machine").nth(n).textContent()) ?? "";
+      return Number(text.match(/zone D in\s+([\d.]+)\s*h/)?.[1] ?? NaN);
+    };
+
     await expect(page.locator(".machine").first()).toContainText("zone D in");
-    await expect(page.locator(".machine").nth(1)).toContainText("trend flat");
+    await expect(page.locator(".machine").nth(1)).toContainText("zone D in");
     await expect(page.locator(".machine").nth(2)).toContainText("trend flat");
+
+    expect(await rul(0), "CNC-07 should be the urgent one").toBeLessThan(await rul(1));
   });
 
   test("draws the trend with the projection to the Zone D crossing", async ({ page }) => {

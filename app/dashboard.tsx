@@ -52,6 +52,17 @@ const money = (n: number) =>
 /** An unreadable figure is a dash, never a confident zero. */
 const cash = (n: number | undefined | null) => (n == null ? "—" : money(n));
 
+/** What a supplier has actually done, straight off the order book. */
+function record(data: State | null, supplier: string): string {
+  const r = data?.supplierRecords?.find((x) => x.supplier === supplier);
+  if (!r || r.delivered + r.cancelled === 0) return "no orders settled yet";
+  const settled = r.delivered + r.cancelled;
+  const rate = r.reliability === null ? null : `${Math.round(r.reliability * 100)}% delivered`;
+  return rate
+    ? `${rate} across ${settled} orders`
+    : `${r.delivered} of ${settled} delivered — too few to rate`;
+}
+
 /**
  * Nothing waits forever. Without this a dropped connection leaves the button
  * reading "Working…" with no way back except a reload, which is not something
@@ -133,6 +144,12 @@ interface State {
   machines: Machine[];
   series: Sample[];
   quotes: { supplier: string; priceUsd: number; leadTimeHours: number }[];
+  supplierRecords: {
+    supplier: string;
+    delivered: number;
+    cancelled: number;
+    reliability: number | null;
+  }[];
   avoidedUsd: number;
   explorer: string;
   chain: Chain | null;
@@ -387,11 +404,15 @@ export default function Dashboard() {
                         : "arrives late"}
                     </span>
                   </div>
+                  <div className="line">
+                    <span className="meta">{record(data, q.supplier)}</span>
+                  </div>
                 </div>
               ))}
               <p className="empty" style={{ borderTop: "1px solid var(--rule)", paddingTop: 10, marginTop: 4 }}>
                 The agent may choose among these. It cannot pay anyone else — the
-                contract rejects any address the plant has not vetted.
+                contract rejects any address the plant has not vetted. Their record is
+                read off the order book, not kept in a spreadsheet.
               </p>
             </div>
           </section>

@@ -1,0 +1,55 @@
+name: CI
+
+# Proves the clone-and-run path on a machine that has never seen this project.
+# Everything here works without a single secret: the contracts run on a local
+# Hardhat node, and the browser suite never calls the model provider.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Contract and unit tests
+        run: npm test
+
+      - run: npx next build
+
+      - name: Bootstrap a local chain
+        run: |
+          npm run keys
+          npx hardhat node &
+          npx wait-on tcp:8545 -t 60000
+          CHAIN=local npm run deploy
+        env:
+          CHAIN: local
+
+      - name: Browser tests
+        run: |
+          npx playwright install --with-deps chromium
+          CHAIN=local npm run dev &
+          npx wait-on http://localhost:3000/api/state -t 120000
+          npm run test:e2e
+        env:
+          CHAIN: local
+          E2E_BASE_URL: http://localhost:3000
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

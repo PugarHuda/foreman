@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { snapshot, series, DEFAULT_ELAPSED_HOURS } from "@/lib/agent.ts";
 import { getState, explorerBase } from "@/lib/chain.ts";
-import { MACHINES, getQuotes, avoidedDowntimeUsd } from "@/lib/plant.ts";
+import { MACHINES, getQuotes, avoidedDowntimeUsd, supplierRecords } from "@/lib/plant.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,8 @@ export async function GET(req: Request) {
     machines,
     series: series(machineId, hours),
     quotes: getQuotes(selected?.criticalPart ?? ""),
+    // Reliability is derived from the order book, not stored anywhere.
+    supplierRecords: supplierRecords(chain?.pos ?? [], getQuotes(selected?.criticalPart ?? "")),
     avoidedUsd: avoidedUsd(chain?.pos ?? [], machines),
     explorer: explorerBase(),
     chain,
