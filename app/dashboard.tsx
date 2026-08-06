@@ -52,6 +52,33 @@ const money = (n: number) =>
 /** An unreadable figure is a dash, never a confident zero. */
 const cash = (n: number | undefined | null) => (n == null ? "—" : money(n));
 
+/**
+ * Nothing waits forever. Without this a dropped connection leaves the button
+ * reading "Working…" with no way back except a reload, which is not something
+ * you want to discover in front of an audience.
+ */
+async function post(url: string, body: unknown, seconds: number) {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), seconds * 1000);
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: POST_HEADERS,
+      body: JSON.stringify(body),
+      signal: abort.signal,
+    });
+  } catch (e) {
+    if (abort.signal.aborted) {
+      throw new Error(
+        `No answer after ${seconds}s. It may still be running — reload before trying again, so you do not order twice.`,
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 interface Machine {
   id: number;
   tag: string;
@@ -183,11 +210,7 @@ export default function Dashboard() {
     setSteps([]);
     setSummary("");
     try {
-      const res = await fetch("/api/agent", {
-        method: "POST",
-        headers: POST_HEADERS,
-        body: JSON.stringify({ hours }),
-      });
+      const res = await post("/api/agent", { hours }, 150);
       const out = await res.json();
       if (!res.ok) throw new Error(out.error);
       setSteps(out.steps);
@@ -205,11 +228,7 @@ export default function Dashboard() {
     setBusy(`${action}-${id}`);
     setError(null);
     try {
-      const res = await fetch("/api/po", {
-        method: "POST",
-        headers: POST_HEADERS,
-        body: JSON.stringify({ action, id }),
-      });
+      const res = await post("/api/po", { action, id }, 90);
       const out = await res.json();
       if (!res.ok) throw new Error(out.error);
       await reload();

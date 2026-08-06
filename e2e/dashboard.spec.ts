@@ -196,6 +196,22 @@ test.describe("wrong path — a broken backend says so", () => {
     });
   });
 
+  test("a connection that drops mid-request gives the control back", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".machine").first()).toBeVisible();
+
+    // Not a hang — an outright failed connection, which is the same code path
+    // as the abort without waiting out a 150s timeout in a test.
+    await page.route("**/api/agent", (route) => route.abort("connectionfailed"));
+
+    await page.getByRole("button", { name: "Run agent" }).click();
+    await expect(page.locator(".error")).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.getByRole("button", { name: "Run agent" }),
+      "the operator must be able to try again without reloading",
+    ).toBeEnabled();
+  });
+
   test("an agent failure surfaces the reason", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator(".machine").first()).toBeVisible();

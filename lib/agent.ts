@@ -135,7 +135,13 @@ export function series(machineId: number, elapsedHours = DEFAULT_ELAPSED_HOURS) 
   );
 }
 
-async function dispatch(name: string, args: any, elapsedHours: number, steps: AgentStep[]) {
+async function dispatch(
+  name: string,
+  args: any,
+  elapsedHours: number,
+  steps: AgentStep[],
+  deps: Required<AgentDeps>,
+) {
   switch (name) {
     case "get_machine_health": {
       const { machine, health } = healthOf(args.machine_id, elapsedHours);
@@ -166,7 +172,7 @@ async function dispatch(name: string, args: any, elapsedHours: number, steps: Ag
       let onOrder = 0;
       let orderBookRead = true;
       try {
-        const { pos } = await getState();
+        const { pos } = await deps.readOrders();
         onHand = stockOnHand(pos, args.part_no);
         onOrder = onOrderCount(pos, args.part_no);
       } catch {
@@ -219,7 +225,7 @@ async function dispatch(name: string, args: any, elapsedHours: number, steps: Ag
         };
       }
 
-      const po = await proposePO(
+      const po = await deps.placeOrder(
         args.machine_id,
         args.part_no,
         args.supplier_address,
@@ -277,6 +283,22 @@ Finish with a two-sentence summary: what you found, and what you did about it.`;
 /** One round trip to the model. Swappable so the loop can be tested without one. */
 export type ChatFn = (messages: unknown[], tools: unknown) => Promise<any>;
 
+/**
+ * Everything the agent reaches outside itself. Injectable so the loop can be
+ * exercised without a model provider or a chain — a test that needs Base
+ * Sepolia to be up is not a unit test, and takes ten seconds to say so.
+ */
+export interface AgentDeps {
+  chat?: ChatFn;
+  readOrders?: () => Promise<{ pos: readonly { partNo: string; status: string }[] }>;
+  placeOrder?: (
+    machineId: number,
+    partNo: string,
+    supplier: `0x${string}`,
+    amountUsd: number,
+  ) => Promise<{ hash: string; id: number; status: string }>;
+}
+
 const veniceChat: ChatFn = async (messages, tools) => {
   const apiKey = process.env.VENICE_API_KEY;
   if (!apiKey) throw new Error("VENICE_API_KEY missing from .env");
@@ -300,8 +322,14 @@ const veniceChat: ChatFn = async (messages, tools) => {
 
 export async function runAgent(
   elapsedHours = DEFAULT_ELAPSED_HOURS,
-  chat: ChatFn = veniceChat,
+  overrides: AgentDeps = {},
 ): Promise<AgentRun> {
+  const deps: Required<AgentDeps> = {
+    chat: overrides.chat ?? veniceChat,
+    readOrders: overrides.readOrders ?? getState,
+    placeOrder: overrides.placeOrder ?? proposePO,
+  };
+  const chat = deps.chat;
   const steps: AgentStep[] = [];
   const messages: any[] = [
     { role: "system", content: SYSTEM },
@@ -341,6 +369,7 @@ export async function runAgent(
           JSON.parse(call.function.arguments || "{}"),
           elapsedHours,
           steps,
+          deps,
         );
       } catch (e) {
         const message = String(e instanceof Error ? e.message : e);
