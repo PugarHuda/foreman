@@ -53,6 +53,17 @@ contract Foreman {
     uint40 public constant RECEIPT_TIMEOUT = 14 days;
     uint40 public constant BUDGET_WINDOW = 30 days;
 
+    /**
+     * How long a proposal may sit unanswered before anyone may clear it.
+     *
+     * An open order blocks its machine-and-part line, and a proposal nobody
+     * approves or rejects would block it for good — one forgotten decision
+     * and the agent can never order that part for that machine again. Nothing
+     * is escrowed while a PO is merely Proposed, so letting it lapse costs the
+     * plant nothing and frees the line.
+     */
+    uint40 public constant PROPOSAL_TTL = 7 days;
+
     IERC20 public immutable token;
 
     /**
@@ -161,16 +172,16 @@ contract Foreman {
         emit PolicySet(_agent, _monthlyCap, _autoApproveMax);
     }
 
-    /// @notice Start handing the plant role to a new key. Nothing changes yet.
+    /// @notice Start handing the plant role to a new key, or pass the zero
+    /// address to call off a handover that has not been accepted.
     function nominatePlant(address nominee) external onlyPlant {
-        if (nominee == address(0)) revert BadSupplier();
         nominatedPlant = nominee;
         emit PlantNominated(nominee);
     }
 
     /// @notice The nominee proves it can sign, and takes over.
     function acceptPlant() external {
-        if (msg.sender != nominatedPlant) revert NotNominated();
+        if (nominatedPlant == address(0) || msg.sender != nominatedPlant) revert NotNominated();
         emit PlantTransferred(plant, msg.sender);
         plant = msg.sender;
         nominatedPlant = address(0);
@@ -328,6 +339,24 @@ contract Foreman {
         po.status = Status.Fitted;
         po.since = uint40(block.timestamp);
         emit Fitted(id, po.machineId, po.partNo);
+    }
+
+    /**
+     * @notice Clear a proposal nobody answered, freeing its line.
+     *
+     * Permissionless on purpose: a Proposed order holds no money, so there is
+     * nothing to steal by expiring one, and requiring the plant to do it is
+     * how the line gets blocked in the first place.
+     */
+    function expireProposal(uint256 id) external {
+        PO storage po = _pos[id];
+        if (po.status != Status.Proposed) revert BadStatus();
+        if (block.timestamp < po.since + PROPOSAL_TTL) revert TooEarly();
+
+        po.status = Status.Cancelled;
+        po.since = uint40(block.timestamp);
+        _openLine[_lineKey(po.machineId, po.partNo)] = false;
+        emit Cancelled(id, 0);
     }
 
     /// @notice Plant kills a PO before the supplier ships. Budget is returned

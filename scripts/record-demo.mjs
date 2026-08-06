@@ -81,6 +81,14 @@ try {
   await confirm.click();
   await beat(6);
 
+  say("issuing the part to the machine");
+  const fit = page.getByRole("button", { name: "Fit to machine" }).first();
+  await fit.waitFor({ timeout: 60_000 });
+  await fit.scrollIntoViewIfNeeded();
+  await beat(3);
+  await fit.click();
+  await beat(6); // it leaves the store, which is what lets the next run order
+
   say("final position");
   await page.mouse.wheel(0, -2000);
   await beat(6);

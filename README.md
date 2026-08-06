@@ -31,8 +31,8 @@ to show than to argue.
 
 | | | |
 |---|---|---|
-| Foreman | [`0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d`](https://sepolia.basescan.org/address/0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d) | [read the verified source](https://base-sepolia.blockscout.com/address/0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d#code) |
-| USDC (mock) | [`0xdc06c8c088fc4a109dfa392c5ded31ced372c4cb`](https://sepolia.basescan.org/address/0xdc06c8c088fc4a109dfa392c5ded31ced372c4cb) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0x95d0e3c0250d9b4839bb3f7881740b7e6bb0f50d) |
+| Foreman | [`0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f`](https://sepolia.basescan.org/address/0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f) | [read the verified source](https://base-sepolia.blockscout.com/address/0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f#code) |
+| USDC (mock) | [`0x2ae3a667aa70d23a365eb8310656d06b7c30183e`](https://sepolia.basescan.org/address/0x2ae3a667aa70d23a365eb8310656d06b7c30183e) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0x66dc8e77fe0e4731427fc0f1f2de3c62270e879f) |
 
 Both are verified, so the bytecode running on Base Sepolia can be checked
 against the source in this repo rather than taken on trust.
@@ -40,14 +40,14 @@ against the source in this repo rather than taken on trust.
 **[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
 straight off the running app by `scripts/record-demo.mjs`.
 
-Those four transactions, which you can check yourself:
+The transactions behind it, which you can check yourself:
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x3e4d5517e05bdd3c28803fd18fa0da31011ecc10ba611b0f7710179199af6a65) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x30c620fe2f3f4dedf998e32843198b71b4364caec19031354c510f5268e86b7b) — `Proposed` only. No `Funded` event, no money moved
-- [A human approves it](https://sepolia.basescan.org/tx/0xecd813a69fc1901f7fa1e767ecf9f89efe5bd17363e73d46a25567c21fe8a3b3) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
-- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0x16720d7dc337014a2b6fa665c4cd8bd92b0b6813b02cdd8865fb712ef8e0075b) — the `Shipped` event carries the document hash
-- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0xedf8cc2c5c2a4b2bdcaa431a44b43f088db34da2472284dcfe554790b1e4654e)
-- [The part is issued to the machine](https://sepolia.basescan.org/tx/0xa5f5f478d9e2c8c5a06461fb8b7a45079c1325cb26698a9cd543bd6ae2143d5d) — it leaves the store, and [the agent orders the next one](https://sepolia.basescan.org/tx/0xee83a31a1fa33f0de0c3fcaa8b16cc020581a8569e976c8b7d790d661afa2dff)
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0xfab8a0ba0c227b009ae6e53a23c4552f5538616410d27cc34021d907a91011f5) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x51a039ef934f5965fdd1dced46b5070afe208b9fa97dfbc7ec1590359070f235) — `Proposed` only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0xe054354f18894d7264c333cf6dadcde3b2fc0c3bb8c14ea9d4e8379651a0427c) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0x01b87fce28f065c7466031ee04fe362056f4294a6974b56799f14a3f28386e27) — the `Shipped` event carries the document hash
+- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0xff8bbe9f77a3044558d4fcef8fdc13c80f84e99fc490993475437057319835b2)
+- [The part is issued to the machine](https://sepolia.basescan.org/tx/0x02756896ff8e1129b977cd308cedb6ac71d3254a0ecfb088b0e15af4d155f1fb) — it leaves the store, and [the agent orders the next one](https://sepolia.basescan.org/tx/0xee83a31a1fa33f0de0c3fcaa8b16cc020581a8569e976c8b7d790d661afa2dff)
 
 The split across two transactions is the whole argument. One key can commit
 routine money; the other is required for anything that is not routine.
@@ -98,7 +98,7 @@ approval queue.
 
 ### The contract
 
-`Foreman.sol` is the whole trust model, in about 200 lines.
+`Foreman.sol` is the whole trust model, in about 250 lines.
 
 | Guarantee | How |
 |---|---|
@@ -113,6 +113,7 @@ approval queue.
 | An order's worth cannot drift | `rulHoursAtOrder` is fixed on chain when the order is placed. Recomputing avoided downtime from today's projection rewrites what a past decision was worth |
 | Supplier cannot be stiffed | `claimAfterTimeout` after 14 days from shipping |
 | Plant cannot be stiffed | escrow only releases on `confirmReceipt` or that timeout |
+| A forgotten decision cannot block a line for good | An open order blocks its machine-and-part line; `expireProposal` lets anyone clear one nobody answered after 7 days. A proposal holds no escrow, so there is nothing to steal by expiring it |
 | A cancelled order does not burn the month | `cancelPO` refunds budget and escrow |
 
 ## Run it
@@ -182,8 +183,8 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 35 contract + unit tests, in-process EVM, no node needed
-npm run test:e2e  # 20 browser tests, against localhost or a deployed instance
+npm test          # 55 contract + unit tests, in-process EVM, no node needed
+npm run test:e2e  # 29 browser tests, against localhost or a deployed instance
 ```
 
 The agent loop is tested too, with the model replaced by a script: that it

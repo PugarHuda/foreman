@@ -70,6 +70,51 @@ test.describe("happy path — the control room reads correctly", () => {
       .toBeLessThan(before);
   });
 
+  test("offers to issue a delivered part, and folds settled orders away", async ({ page }) => {
+    // Stubbed so this covers the panel, not whatever the chain happens to hold.
+    await page.route("**/api/state**", async (route) => {
+      const body = await (await route.fetch()).json();
+      const po = (id: number, status: string, partNo = "6205-2RS") => ({
+        id,
+        supplier: "0x0000000000000000000000000000000000000003",
+        since: 0,
+        status,
+        agentFunded: true,
+        machineId: 7,
+        amountUsd: 180,
+        partNo,
+        rulHoursAtOrder: 58,
+        waybill: null,
+      });
+      body.chain = {
+        foreman: "0x0000000000000000000000000000000000000001",
+        agent: "0x0000000000000000000000000000000000000002",
+        availableUsd: 50000,
+        escrowedUsd: 0,
+        monthlyCapUsd: 2000,
+        autoApproveMaxUsd: 500,
+        remainingBudgetUsd: 2000,
+        pos: [po(0, "Released"), po(1, "Fitted"), po(2, "Cancelled", "SPN-880")],
+      };
+      body.chainError = null;
+      await route.fulfill({ json: body });
+    });
+    await page.goto("/");
+
+    // A delivered part can be issued to the machine.
+    await expect(page.getByRole("button", { name: "Fit to machine" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Finished orders are collapsed behind a count, not listed forever.
+    const fold = page.locator("details summary");
+    await expect(fold).toHaveText(/2 settled orders/);
+    await expect(page.getByText("#1 6205-2RS")).toBeHidden();
+
+    await fold.click();
+    await expect(page.getByText("#1 6205-2RS")).toBeVisible();
+  });
+
   test("keeps the page usable at phone width", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator(".wordmark")).toBeVisible();

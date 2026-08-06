@@ -13,6 +13,7 @@ const DEPOSIT = usdc(50_000);
 const REF = "0x" + "a1".repeat(32) as `0x${string}`;
 const OTHER_REF = "0x" + "b2".repeat(32) as `0x${string}`;
 const NO_REF = ("0x" + "00".repeat(32)) as `0x${string}`;
+const ZERO = "0x0000000000000000000000000000000000000000" as const;
 
 const Status = {
   Proposed: 1,
@@ -394,6 +395,64 @@ describe("Foreman", () => {
     await expectRevert(
       foreman.write.deposit([usdc(100)], { account: outsider.account }),
       "NotPlant",
+    );
+  });
+
+  it("lets an unanswered proposal lapse so the line is not blocked for good", async () => {
+    const { agent, supplier, outsider, foreman } = await deploy();
+    const spindle = usdc(4_000);
+
+    await foreman.write.proposePO([7, "SPN-880", supplier.account.address, spindle, 35], {
+      account: agent.account,
+    });
+    assert.equal(await foreman.read.isOnOrder([7, "SPN-880"]), true);
+
+    // Nobody approved or rejected it, and the agent is now locked out.
+    await expectRevert(
+      foreman.write.proposePO([7, "SPN-880", supplier.account.address, spindle, 20], {
+        account: agent.account,
+      }),
+      "AlreadyOnOrder",
+    );
+    await expectRevert(foreman.write.expireProposal([0n], { account: outsider.account }), "TooEarly");
+
+    await networkHelpers.time.increase(8 * 24 * 60 * 60);
+
+    // Permissionless: nothing is escrowed on a proposal, so anyone may clear it.
+    await foreman.write.expireProposal([0n], { account: outsider.account });
+    assert.equal((await foreman.read.getPO([0n])).status, Status.Cancelled);
+    assert.equal(await foreman.read.isOnOrder([7, "SPN-880"]), false);
+    assert.equal(await foreman.read.escrowed(), 0n, "a proposal never held money");
+
+    await foreman.write.proposePO([7, "SPN-880", supplier.account.address, spindle, 20], {
+      account: agent.account,
+    });
+  });
+
+  it("will not expire an order that money is already behind", async () => {
+    const { plant, agent, supplier, outsider, foreman } = await deploy();
+
+    await foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
+      account: agent.account,
+    });
+    await networkHelpers.time.increase(8 * 24 * 60 * 60);
+
+    // Funded, not Proposed — expiring this would strand escrow.
+    await expectRevert(foreman.write.expireProposal([0n], { account: outsider.account }), "BadStatus");
+    assert.equal(await foreman.read.escrowed(), usdc(180));
+  });
+
+  it("lets the plant call off a handover it has not completed", async () => {
+    const { plant, outsider, foreman } = await deploy();
+
+    await foreman.write.nominatePlant([outsider.account.address], { account: plant.account });
+    await foreman.write.nominatePlant([ZERO], { account: plant.account });
+
+    await expectRevert(foreman.write.acceptPlant({ account: outsider.account }), "NotNominated");
+    assert.equal(
+      (await foreman.read.plant()).toLowerCase(),
+      plant.account.address.toLowerCase(),
+      "the original key keeps authority",
     );
   });
 

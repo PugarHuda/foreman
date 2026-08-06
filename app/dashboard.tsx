@@ -243,7 +243,11 @@ export default function Dashboard() {
   const chain = data?.chain ?? null;
   const selected = data?.machines.find((m) => m.id === machineId);
   const waiting = chain?.pos.filter((p) => p.status === "Proposed") ?? [];
-  const open = chain?.pos.filter((p) => p.status !== "Proposed") ?? [];
+  /* Orders still in play stay on screen; ones that are done fold away, or the
+     column becomes a wall of history after a few runs. */
+  const settled = new Set(["Fitted", "Cancelled"]);
+  const live = chain?.pos.filter((p) => p.status !== "Proposed" && !settled.has(p.status)) ?? [];
+  const done = chain?.pos.filter((p) => settled.has(p.status)) ?? [];
 
   return (
     <main className="shell">
@@ -504,8 +508,13 @@ export default function Dashboard() {
               )}
             </header>
             <div className="body">
-              {open.length === 0 && <p className="empty">No orders placed yet.</p>}
-              {open.map((po) => (
+              {live.length === 0 && done.length === 0 && (
+                <p className="empty">No orders placed yet.</p>
+              )}
+              {live.length === 0 && done.length > 0 && (
+                <p className="empty">Nothing in flight.</p>
+              )}
+              {live.map((po) => (
                 <div className="po" key={po.id}>
                   <div className="line">
                     <span className="part">
@@ -555,6 +564,31 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+
+              {done.length > 0 && (
+                <details style={{ marginTop: live.length ? 12 : 0 }}>
+                  <summary className="empty" style={{ cursor: "pointer" }}>
+                    {done.length} settled {done.length === 1 ? "order" : "orders"}
+                  </summary>
+                  {done.map((po) => (
+                    <div className="po" key={po.id}>
+                      <div className="line">
+                        <span className="part">
+                          #{po.id} {po.partNo}
+                        </span>
+                        <span className="amount">{money(po.amountUsd)}</span>
+                      </div>
+                      <div className="line">
+                        <span className="meta">
+                          {po.agentFunded ? "signed by agent" : "approved by plant"}
+                        </span>
+                        <span className="badge">{po.status}</span>
+                      </div>
+                      {po.waybill && <div className="meta">waybill {po.waybill}</div>}
+                    </div>
+                  ))}
+                </details>
+              )}
             </div>
           </section>
         </div>
