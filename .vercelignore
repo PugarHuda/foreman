@@ -1,0 +1,30 @@
+# `vercel --prod` uploads the working tree, and it does not read .gitignore.
+# Anything git ignores can still ship to a deployment unless it is named here —
+# which is how a local test journal ended up being served from production.
+#
+# A push to main deploys from git and only carries committed files, so this
+# file is the belt to that braces. Deploy from git; keep this correct anyway.
+
+.env
+.env.*
+!.env.example
+
+# Ingested telemetry and the journal are a plant's own records, written at
+# runtime on a box with a disk. They are never part of a build.
+data/
+
+# Test output, contract build artifacts, and the suites themselves. None of it
+# runs in production and the videos are megabytes.
+test-results/
+playwright-report/
+blob-report/
+.playwright-mcp/
+artifacts/
+cache/
+e2e/
+test/
+docs/*.webm
+docs/page@*.webm
+
+.vercel
+.git

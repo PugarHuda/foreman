@@ -20,7 +20,9 @@ queue](docs/dashboard.png)
 ## Live
 
 **[foreman-six-psi.vercel.app](https://foreman-six-psi.vercel.app)** — the
-pitch in one page, with the control room itself one click away at
+pitch in one page, the full argument as slides at
+[`/deck`](https://foreman-six-psi.vercel.app/deck), and the control room
+itself one click away at
 [`/dashboard`](https://foreman-six-psi.vercel.app/dashboard). It is wired to
 Base Sepolia: press *Run agent* and it spends actual testnet money on your
 behalf.
@@ -38,6 +40,12 @@ to show than to argue.
 
 Both are verified, so the bytecode running on Base Sepolia can be checked
 against the source in this repo rather than taken on trust.
+
+**[The deck](https://foreman-six-psi.vercel.app/deck)** — eleven slides at a
+URL rather than a file somebody has to be sent, so there is exactly one
+version of it and its numbers are read off the contract at render time rather
+than off a screenshot taken three days ago. Print to PDF from the browser: the
+stylesheet swaps to a light palette that is contrast-checked like the dark one.
 
 **[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
 straight off the running app by `scripts/record-demo.mjs`.
@@ -123,10 +131,16 @@ sequence is the part worth watching.
 | Plant cannot be stiffed | escrow only releases on `confirmReceipt` or that timeout |
 | A forgotten decision cannot block a line for good | An open order blocks its machine-and-part line; `expireProposal` lets anyone clear one nobody answered after 7 days. A proposal holds no escrow, so there is nothing to steal by expiring it |
 | The audit trail is checkable, not just printable | `/api/audit` exports the order book as CSV, every row naming the contract it came from. An auditor can re-derive any line from a block explorer instead of trusting the file |
-| Agent cannot invent a price either | The allowlist binds who is paid and the cap binds the monthly total; between them, a decimal in the wrong place was a vetted supplier handed ten times their quote, inside budget. `create_purchase_order` now refuses any `amount_usd` that is not the quoted price. The agent chooses whose price to take, it does not write one |
 | Supplier reliability is derived, not maintained | `supplierRecords` scores despatch against the lead time the supplier quoted, straight off the order book. Nobody keeps the scorecard, so nobody can quietly revise it, and a plant switching systems carries it with them. It deliberately ignores cancellations: only the plant can cancel, so scoring them rated the plant's own decisions and dragged suppliers under the line the agent routes on |
 | The panel is readable, not just tidy | Every text tier clears WCAG AA on every surface it lands on, checked in `test/contrast.test.ts`. The old third tier sat at 2.8:1 while carrying machine names, status badges and the ISO zone labels |
 | A cancelled order does not burn the month | `cancelPO` refunds budget and escrow |
+
+One guard deliberately lives a layer up, and it is worth naming rather than
+folding into the table above:
+
+| Guard | Where | Why there |
+|---|---|---|
+| Agent cannot invent a price | `lib/agent.ts`, **not** the contract | The allowlist binds *who* is paid and the cap binds the monthly total. Between them nothing bound the *figure* — a decimal in the wrong place was a vetted supplier handed ten times their quote, inside budget, with every guarantee above still true. The agent's tool now refuses any `amount_usd` that is not the quoted price. It is not on chain because the price list is not on chain: the quotes come from the plant's ERP, and putting them on chain would mean writing every supplier price change as a transaction. The honest description is a tool-layer guard, and calling it a contract guarantee would put the rest of this table in doubt |
 
 ## Run it
 
@@ -201,12 +215,12 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 148 contract + unit tests, in-process EVM, no node needed
+npm test          # 150 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 
 # The pilot surfaces — ingest, the asset register, an ERP, a real login —
 # need an instance started in pilot configuration, so they are skipped unless
-# you point them at one. 33 pilot tests, happy path and wrong path.
+# you point them at one. 38 pilot tests, happy path and wrong path.
 PILOT_BASE_URL=http://localhost:3000 PILOT_TELEMETRY_TOKEN=… PILOT_PASSWORD=…   npx playwright test pilot
 ```
 
@@ -481,6 +495,13 @@ network, an asset the plant did not authorise, a price over the per-call
 limit. An agent that stops paying for its supplier feed and cannot say which
 rule stopped it is an outage nobody can diagnose.
 
+Proved end to end against a metered supplier API that offers the same asset on
+two chains, with the wrong-chain offer priced at 1 unit against 2500. The
+agent takes the expensive correct one: the cheap optimisation would have sent
+money to a chain the plant never authorised. The suite asserts that, plus that
+nothing is paid before a 402 asks for it, and that no two payments share a
+nonce — EIP-3009 replays anything reused.
+
 ### What a pilot still is not
 
 Testnet USDC and an unaudited contract. Both are deliberate: get the plant
@@ -497,8 +518,11 @@ a standards-defined threshold is how condition monitoring actually does it.
 The ISO 10816-3 Class II severity bands. The agent's reasoning and tool calls.
 
 **Real:** the static analysis. `slither` runs on every push and fails the
-build on anything medium or above (`.github/workflows/ci.yml`). That is not an
-audit — it is the floor an audit starts from.
+build on anything medium or above (`.github/workflows/ci.yml`). It reports 19
+findings, none medium or above; every one of them is triaged in
+[`docs/static-analysis.md`](docs/static-analysis.md), including the two that
+are real and are waiting for the redeployment mainnet needs anyway. That is
+not an audit — it is the floor an audit starts from.
 
 **Real:** the delivery control. The supplier signs a commitment to a document
 reference before the plant can release anything, and a mismatched reference

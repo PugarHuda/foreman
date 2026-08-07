@@ -40,6 +40,9 @@ Add new: **viem**, **Base**, **Playwright**
 https://foreman-six-psi.vercel.app
 ```
 
+The deck lives at `/deck` and the control room at `/dashboard`, both linked
+from the landing page.
+
 ## Project Link
 
 ```
@@ -57,11 +60,9 @@ as the hackathon (Base).
 
 ## Images (up to 4, 1280x720)
 
-1. `docs/dashboard.png` — the control room: severity rail, the projected Zone D
-   crossing, the agent's reasoning trace, the order queue. Already in the repo.
-2. Screenshot the landing page at <https://foreman-six-psi.vercel.app>.
-3. Optional: a frame from `docs/demo.webm` at the moment the agent funds the PO.
-4. Optional: the Basescan page for the funded transaction.
+Purpose-made images are in `public/brand/` (`01-*.png` … `04-*.png`), sized
+1280x720. `docs/dashboard.png` is the product screenshot if you would rather
+lead with the real thing.
 
 ## Demo Video
 
@@ -81,7 +82,7 @@ The split is the whole argument. A $180 bearing executes autonomously. A $4,000 
 
 What the contract will not let the agent do:
 - Invent a payee. Payment only reaches an allowlisted supplier, so a hallucinated or injected address is rejected at the contract, not by a prompt.
-- Invent a price. The agent chooses whose quote to take; it cannot write the amount.
+- Invent a price. The agent chooses whose quote to take; it cannot write the amount. (This one is enforced in the tool layer rather than on chain, because the supplier price list is not on chain.)
 - Re-buy what is already coming. A second order for the same part on the same machine reverts.
 - Overspend. A 30-day cap, checked on every autonomous fund.
 - Release escrow on a bare click. The supplier commits a despatch document hash with their own key, and receipt reverts unless goods-in submits a reference that matches.
@@ -117,7 +118,7 @@ Several real bugs were found and fixed along the way, each caught by a test writ
 - Number(null) is 0, so a sensor publishing nulls read as a perfectly healthy machine at 0 mm/s.
 - A gateway that stopped reporting left a flat tail on a healthy number, and nothing looked wrong.
 
-Verified: 143 contract and unit tests offline, 32 browser tests, and 33 pilot tests covering happy path and wrong path. Slither runs on every push. A one-machine pilot was exercised end to end — 401 readings posted through the bridge from a historian export, producing a 47.2 hour projected life at r² 0.976.
+Verified: 150 contract and unit tests offline, 32 browser tests, and 38 pilot tests covering happy path and wrong path. Slither runs on every push and its 19 findings are each triaged in writing. A one-machine pilot was exercised end to end — 401 readings posted through the bridge from a historian export, producing a 47.2 hour projected life at r² 0.976.
 ```
 
 ## Fundraising Status

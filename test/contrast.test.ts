@@ -8,9 +8,38 @@ import fs from "node:fs";
  * smallest text on a shop-floor panel was also the faintest.
  */
 const css = fs.readFileSync("app/globals.css", "utf8");
-const vars = Object.fromEntries(
-  [...css.matchAll(/--([a-z-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]),
-);
+
+/**
+ * Each `:root` block is its own palette. There are two: the panel's dark one,
+ * and the light one the print stylesheet swaps in so a deck printed to PDF is
+ * black on white rather than a page of toner.
+ *
+ * Reading every `--x: #hex` in the file into one object silently let the
+ * second palette overwrite the first, so the suite spent a while checking the
+ * print colours against themselves and calling it the panel. Parse the blocks
+ * apart, and check both — a printed deck has to be readable too.
+ */
+function palettes(): Record<string, string>[] {
+  const blocks = [...css.matchAll(/:root\s*\{([^}]*)\}/g)].map((m) =>
+    Object.fromEntries(
+      [...m[1].matchAll(/--([a-z-]+):\s*(#[0-9a-fA-F]{3,8})\b/g)].map((v) => [
+        v[1],
+        // #abc is legal CSS and was being skipped, which is how a colour
+        // leaves the contrast check without anyone deleting it.
+        v[2].length === 4
+          ? `#${v[2][1]}${v[2][1]}${v[2][2]}${v[2][2]}${v[2][3]}${v[2][3]}`
+          : v[2].slice(0, 7),
+      ]),
+    ),
+  );
+  if (blocks.length === 0) throw new Error("no :root palette found in globals.css");
+  const [base, ...overrides] = blocks;
+  // An override block only restates what it changes, so merge onto the base.
+  return [base, ...overrides.map((o) => ({ ...base, ...o }))];
+}
+
+const ALL = palettes();
+const vars = ALL[0];
 
 function relativeLuminance(hex: string): number {
   const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -35,6 +64,22 @@ describe("palette contrast", () => {
           ratio >= 4.5,
           `--${text} on --${surface} is ${ratio.toFixed(2)}:1, needs 4.5:1`,
         );
+      }
+    }
+  });
+
+  /* A deck printed to PDF is how this pitch reaches anyone who was not sent
+     the URL, and paper has no dark mode. */
+  it("meets it on paper too, for every palette in the file", () => {
+    for (const [i, palette] of ALL.entries()) {
+      for (const text of ["ink", "muted", "dim"] as const) {
+        for (const surface of SURFACES) {
+          const ratio = contrast(palette[text], palette[surface]);
+          assert.ok(
+            ratio >= 4.5,
+            `palette ${i}: --${text} on --${surface} is ${ratio.toFixed(2)}:1, needs 4.5:1`,
+          );
+        }
       }
     }
   });

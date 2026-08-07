@@ -244,7 +244,15 @@ export default function Dashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/runs?limit=1", { cache: "no-store" });
+        /* The journal sits behind the same gate as the money routes, so this
+           read needs the same credentials the writes use. Without them it
+           401s on any deployment where the gate is on — which is every
+           deployment, and none of the local runs where it was tested. */
+        const res = await fetch("/api/runs?limit=1", {
+          cache: "no-store",
+          headers: POST_HEADERS,
+          credentials: "same-origin",
+        });
         if (!res.ok) return;
         const { runs } = await res.json();
         const last = runs?.[0];

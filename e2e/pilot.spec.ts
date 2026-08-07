@@ -17,6 +17,9 @@ const CRON = process.env.PILOT_CRON_TOKEN ?? "";
 const TOKEN = process.env.PILOT_TELEMETRY_TOKEN ?? "";
 const PASSWORD = process.env.PILOT_PASSWORD ?? "";
 const TAG = process.env.PILOT_TAG ?? "LATHE-01";
+/** A pilot instance whose ERP charges per call, plus that merchant's log URL. */
+const X402 = process.env.PILOT_X402_BASE;
+const MERCHANT = process.env.PILOT_X402_MERCHANT;
 
 test.skip(!BASE, "set PILOT_BASE_URL to an instance running in pilot configuration");
 
@@ -439,5 +442,76 @@ test.describe("wrong path — guessing an operator password", () => {
 
     expect(await unknown.text()).toBe(await known.text());
     await ctx.dispose();
+  });
+});
+
+
+/**
+ * Paying for data, over HTTP 402.
+ *
+ * Needs a second pilot instance pointed at a metered supplier API, so it is
+ * skipped unless PILOT_X402_BASE and PILOT_X402_MERCHANT are both set.
+ */
+test.describe("x402 — the agent buys the information it reasons with", () => {
+  test.skip(!X402 || !MERCHANT, "set PILOT_X402_BASE and PILOT_X402_MERCHANT");
+
+  const x402 = () => playwrightRequest.newContext({ baseURL: X402 });
+  const merchantLog = async () => {
+    const ctx = await playwrightRequest.newContext({ baseURL: MERCHANT });
+    const log = await (await ctx.get("/_log")).json();
+    await ctx.dispose();
+    return log as { url: string; paid: boolean; decoded?: Record<string, any> }[];
+  };
+
+  test("gets quotes out of an endpoint that charges for them", async () => {
+    const ctx = await x402();
+    const body = await (await ctx.get("/api/state")).json();
+
+    expect(body.quotes.length, "a 402 that was not paid yields no quotes").toBeGreaterThan(0);
+    expect(body.quotes[0].priceUsd).toBeGreaterThan(0);
+    await ctx.dispose();
+  });
+
+  test("pays only after being asked, never pre-emptively", async () => {
+    const log = await merchantLog();
+    expect(log.length).toBeGreaterThan(0);
+    expect(log[0].paid, "the first call must be the unpaid one that gets the challenge").toBe(false);
+    expect(log.some((e) => e.paid), "and something must have been paid after it").toBe(true);
+  });
+
+  /* The merchant offers the same asset on two chains, and the wrong-chain
+     offer is priced at 1 unit against 2500. Taking the cheap one would be the
+     obvious optimisation and would send real money to a chain the plant never
+     authorised. */
+  test("refuses a cheaper offer on a chain it was not authorised for", async () => {
+    const log = await merchantLog();
+    const paid = log.filter((e) => e.paid && e.decoded);
+
+    expect(paid.length).toBeGreaterThan(0);
+    for (const e of paid) {
+      expect(e.decoded!.network, "paid on the wrong network").toBe("eip155:84532");
+      expect(e.decoded!.payload.authorization.value).toBe("2500");
+    }
+  });
+
+  test("signs EIP-3009 as the agent, with a bounded window and a random nonce", async () => {
+    const log = await merchantLog();
+    const paid = log.find((e) => e.paid && e.decoded)!;
+    const auth = paid.decoded!.payload.authorization;
+
+    expect(paid.decoded!.scheme).toBe("exact");
+    expect(auth.from).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(Number(auth.validBefore)).toBeGreaterThan(Number(auth.validAfter));
+    // EIP-3009 replays anything reused, so this must be random, not a counter.
+    expect(auth.nonce).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  test("gives every payment its own nonce", async () => {
+    const log = await merchantLog();
+    const nonces = log
+      .filter((e) => e.paid && e.decoded)
+      .map((e) => e.decoded!.payload.authorization.nonce);
+
+    expect(new Set(nonces).size, "a reused nonce is a replayable payment").toBe(nonces.length);
   });
 });

@@ -74,9 +74,20 @@ describe("documented test counts", () => {
     for (const [, claimed] of text.matchAll(/(\d+)\s+pilot/g)) {
       assert.equal(Number(claimed), pilotTotal, `${doc} claims ${claimed} pilot tests`);
     }
+    /* The deck quotes one total rather than a breakdown. It is a document
+       making a claim to a judge like any other, so it drifts like any other. */
+    for (const [, claimed] of text.matchAll(/(\d+)<\/div>\s*<div className="sub">across contract/g)) {
+      assert.equal(
+        Number(claimed),
+        unitTotal + e2eTotal + pilotTotal,
+        `${doc} claims ${claimed} tests in total`,
+      );
+    }
   };
 
   it("the README states the real numbers", () => check("README.md"));
 
   it("the demo script states the real numbers", () => check("docs/demo-script.md"));
+
+  it("the deck states the real numbers", () => check("app/deck/page.tsx"));
 });

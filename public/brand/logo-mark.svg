@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Foreman">
+  <title>Foreman</title>
+  <rect width="64" height="64" rx="4" fill="#0b0e11"/>
+  <rect x="10" y="26" width="11.06" height="12" fill="#3fb27f"/>
+  <rect x="22.56" y="26" width="6.72" height="12" fill="#c2cc4a"/>
+  <rect x="30.78" y="26" width="10.27" height="12" fill="#e8a33d"/>
+  <rect x="42.55" y="26" width="11.46" height="12" fill="#e5484d"/>
+  <rect x="26" y="17" width="3" height="30" fill="#e6ebf0"/>
+</svg>

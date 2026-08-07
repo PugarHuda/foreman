@@ -67,6 +67,9 @@ export default async function Landing() {
           <Link className="btn primary" href="/dashboard">
             Open the control room
           </Link>
+          <Link className="btn" href="/deck">
+            Read the deck
+          </Link>
           <a className="btn" href="https://github.com/PugarHuda/foreman">
             Read the source
           </a>
