@@ -209,6 +209,26 @@ describe("the shape a chat app actually expects", () => {
     assert.equal(seen!.title, "CNC-07 stopped reporting");
   });
 
+  /* Telegram needs a recipient as well as a message. It could ride in the
+     webhook URL's query string, and probably would work — but "the API seems
+     to read parameters from both places at once" is not a thing to discover
+     is false on the night an order needed approving. */
+  it("names the recipient in the body when one is configured", async () => {
+    process.env.NOTIFY_CHAT_ID = "-1001234567890";
+    await notify({ kind: "approval", title: "t", detail: "d" });
+
+    assert.equal(seen!.chat_id, "-1001234567890");
+    assert.ok(seen!.text, "the message still has to be there too");
+    delete process.env.NOTIFY_CHAT_ID;
+  });
+
+  it("leaves the recipient out entirely for webhooks that have no such idea", async () => {
+    delete process.env.NOTIFY_CHAT_ID;
+    await notify({ kind: "approval", title: "t", detail: "d" });
+
+    assert.equal("chat_id" in seen!, false, "Slack and Discord would reject an unknown field");
+  });
+
   it("posts nothing at all when no webhook is configured", async () => {
     delete process.env.NOTIFY_WEBHOOK_URL;
     assert.equal(await notify({ kind: "failure", title: "x", detail: "y" }), false);

@@ -67,8 +67,19 @@ export async function notify(event: NotifyEvent): Promise<boolean> {
          the other's: Slack (and Google Chat, Mattermost, Teams) reads `text`,
          Discord reads `content` and rejects a body without it as an empty
          message. Sending both costs one duplicated line and removes the
-         "which chat app is this" question from deployment entirely. */
-      body: JSON.stringify({ ...event, text, content: text }),
+         "which chat app is this" question from deployment entirely.
+
+         NOTIFY_CHAT_ID is for Telegram, which needs a recipient as well as a
+         message. It could ride in the query string of the webhook URL, and
+         probably would work — but "the API seems to read parameters from both
+         places at once" is not something to find out is false on the night an
+         order needed approving. Put it in the body, where it is documented. */
+      body: JSON.stringify({
+        ...event,
+        text,
+        content: text,
+        ...(process.env.NOTIFY_CHAT_ID ? { chat_id: process.env.NOTIFY_CHAT_ID } : {}),
+      }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) console.warn(`[foreman] notify ${event.kind}: ${res.status}`);

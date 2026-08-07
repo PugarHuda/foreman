@@ -201,7 +201,7 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 146 contract + unit tests, in-process EVM, no node needed
+npm test          # 148 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 
 # The pilot surfaces — ingest, the asset register, an ERP, a real login —
@@ -400,7 +400,21 @@ destinations disagree about the name and neither tolerates the other's — Slack
 rejects a body without it as an empty message. The structured fields
 (`kind`, `title`, `detail`, `url`) ride alongside for anything that parses
 rather than renders. Any endpoint that accepts a POST works; there is no
-per-destination integration to pick. It fires when an order needs a human, when a machine stops
+per-destination integration to pick.
+
+Telegram also needs a recipient, so `NOTIFY_CHAT_ID` goes in the body next to
+the message:
+
+```
+NOTIFY_WEBHOOK_URL=https://api.telegram.org/bot<TOKEN>/sendMessage
+NOTIFY_CHAT_ID=<chat id>
+```
+
+It could have ridden in the URL's query string and probably would have worked,
+but mixing query parameters with a JSON body is not something Telegram's docs
+promise, and the night an order needs approving is a bad time to find out. It
+is omitted entirely when unset, because Slack and Discord reject fields they
+do not know. It fires when an order needs a human, when a machine stops
 reporting, when a run fails, and once per scheduled assessment. One webhook
 rather than an integration per destination, with a per-key cooldown so a
 polling dashboard does not page anyone sixty times an hour.
