@@ -35,8 +35,8 @@ to show than to argue.
 
 | | | |
 |---|---|---|
-| Foreman | [`0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9`](https://sepolia.basescan.org/address/0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9) | [read the verified source](https://base-sepolia.blockscout.com/address/0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9#code) |
-| USDC (mock) | [`0xc4798b4385c4c0c22e3eeac9fb5efa560883d501`](https://sepolia.basescan.org/address/0xc4798b4385c4c0c22e3eeac9fb5efa560883d501) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9) |
+| Foreman | [`0x6cc8fafc87328a087ac0da2d0c8cae7f9bec2e9a`](https://sepolia.basescan.org/address/0x6cc8fafc87328a087ac0da2d0c8cae7f9bec2e9a) | [read the verified source](https://base-sepolia.blockscout.com/address/0x6cc8fafc87328a087ac0da2d0c8cae7f9bec2e9a#code) |
+| USDC (mock) | [`0x4944908fa528e017340df511dbae5bbb8dc91720`](https://sepolia.basescan.org/address/0x4944908fa528e017340df511dbae5bbb8dc91720) | [verified on Sourcify](https://sourcify.dev/server/repo-ui/84532/0x6cc8fafc87328a087ac0da2d0c8cae7f9bec2e9a) |
 
 Both are verified, so the bytecode running on Base Sepolia can be checked
 against the source in this repo rather than taken on trust.
@@ -52,12 +52,19 @@ straight off the running app by `scripts/record-demo.mjs`.
 
 The transactions behind it, which you can check yourself:
 
-- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x4b5193a67ff997c869980596adc686a30f751c947225c27f5b6dea0d6e002e81) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
-- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x6f55392627d4f6eb5d0de5f55a4d323093e37c4504cd1d86b4aba43f88f2dae0) — `Proposed` only. No `Funded` event, no money moved
-- [A human approves it](https://sepolia.basescan.org/tx/0xe502ecb2105e5d3d9e8cee8dfe30cdcc7e60b19cc08dd756e2efb289e4868e3d) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
-- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0xdd206882bff9d441a97a8e9f259542c09bc267b7b4d2873bc1d0f6f55862b074) — the `Shipped` event carries the document hash
-- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0x31d25b24ab0b6c757d36cca4f06de055b317284a5c41fc07b56dcd77fcecca46)
-- [The part is issued to the machine](https://sepolia.basescan.org/tx/0xf45af170bc3e2cf37a51dc6ee537958de25e9974174726ac0ec7859d0ceb4ca8) — it leaves the store, which is what lets the agent order the next one
+- [Agent signs a $180 bearing alone](https://sepolia.basescan.org/tx/0x26e3e68400067772bde0b556245b3614d72b1693b81782960d58af2cd28ca0b6) — `Proposed` and `Funded` in one transaction, because it is under the ceiling
+- [Agent stops at a $4,000 spindle](https://sepolia.basescan.org/tx/0x6710c1252d52004dc11f99558f0ea4e661ba33b1a9b394d51727199c1ab50707) — `Proposed` only. No `Funded` event, no money moved
+- [A human approves it](https://sepolia.basescan.org/tx/0xea977baf240626397d6a95036f986fcd931ebb0bde93ad85d28a9b109c6df251) — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant
+- [Supplier commits to a waybill on despatch](https://sepolia.basescan.org/tx/0xb263725c6e3f3c98db5d5a040e0dc66221d8cb6fdf7d295cc36fee89a53bc366) — the `Shipped` event carries the document hash
+- [Supplier paid once goods-in matched it](https://sepolia.basescan.org/tx/0xd64e789c6c7d7acc1590e593f729bcd88ad4d09fbdf5ccf8e030f0087d128df9)
+- [The part is issued to the machine](https://sepolia.basescan.org/tx/0x64db40fad8f23cd7f4f84e5abb42d2cb741695088a78d495451713c5cd74fd70) — it leaves the store, which is what lets the agent order the next one
+- [The plant cancels a funded order](https://sepolia.basescan.org/tx/0xa33292d7e28546f0c82046e3913ff2df4aca190f1f96d39881527a08623aedce) — escrow and the agent's budget both come back
+
+That list is generated, not maintained: `node --env-file=.env scripts/evidence.ts`
+walks the whole lifecycle on a fresh deployment and writes
+[`docs/evidence.md`](docs/evidence.md). The old version was hand-copied, which
+meant a redeployment silently invalidated the one thing the README asks anyone
+to check.
 
 The split across two transactions is the whole argument. One key can commit
 routine money; the other is required for anything that is not routine.
@@ -215,7 +222,7 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 165 contract + unit tests, in-process EVM, no node needed
+npm test          # 169 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 
 # The pilot surfaces — ingest, the asset register, an ERP, a real login —
@@ -544,10 +551,12 @@ a standards-defined threshold is how condition monitoring actually does it.
 The ISO 10816-3 Class II severity bands. The agent's reasoning and tool calls.
 
 **Real:** the static analysis. `slither` runs on every push and fails the
-build on anything medium or above (`.github/workflows/ci.yml`). It reports 19
-findings, none medium or above; every one of them is triaged in
-[`docs/static-analysis.md`](docs/static-analysis.md), including the two that
-are real and are waiting for the redeployment mainnet needs anyway. That is
+build on anything medium or above (`.github/workflows/ci.yml`). It reported 19
+findings, none medium or above. The two that were real — a missing zero-check
+on `setPolicy`'s agent, and an unindexed address in `PolicySet` — are fixed and
+redeployed, with tests. Every other finding is triaged in writing in
+[`docs/static-analysis.md`](docs/static-analysis.md), including the one that is
+still reported and is a false positive. That is
 not an audit — it is the floor an audit starts from.
 
 **Real:** the delivery control. The supplier signs a commitment to a document

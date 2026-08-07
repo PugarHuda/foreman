@@ -18,42 +18,38 @@ python -m slither contracts/Foreman.sol \
 
 ## Result
 
-**19 findings. None medium or above.** Below is every one of them.
+**19 findings on the first run. None medium or above.** The two that were real
+have been fixed and redeployed; the rest are excluded with reasons below.
 
 ## Acted on
 
-Nothing yet, and that is a deliberate trade rather than an omission — see
-"Deferred to the next deployment" below.
+Both required a contract change, so they went out together with a fresh
+deployment — and the evidence transactions the README asks a judge to check
+were regenerated against it by `scripts/evidence.ts` rather than hand-copied.
 
-## Deferred to the next deployment
+### `missing-zero-check` on `setPolicy(_agent)` — fixed
 
-Two findings are real and both need a redeployed contract to fix. The
-deployed contract is verified on Base Sepolia and the README stakes its whole
-argument on the bytecode there matching this source; changing the source
-without redeploying breaks that claim, and redeploying invalidates every
-transaction link the README asks a judge to check. Neither finding can lose
-funds, so they wait for the deployment that mainnet needs anyway.
+`setPolicy(address(0), cap, ceiling)` set the agent to the zero address, which
+disabled the autonomous lane entirely: nobody can satisfy
+`msg.sender == agent`. Plant-only and undoable with another `setPolicy`, so a
+footgun rather than a vulnerability — but inconsistent, because `setSupplier`
+had always refused the zero address.
 
-### `missing-zero-check` on `setPolicy(_agent)`
+Now `revert BadAgent()`, in both `setPolicy` and the constructor. Standing the
+agent down is `monthlyCap = 0`, which says so on chain instead of leaving an
+address nobody can sign for. Covered by three contract tests.
 
-`setPolicy(address(0), cap, ceiling)` sets the agent to the zero address,
-which disables the autonomous lane entirely — nobody can satisfy
-`msg.sender == agent`. It is plant-only and the plant can undo it with another
-`setPolicy`, so it is a footgun rather than a vulnerability. It is also
-inconsistent: `setSupplier` already reverts with `BadSupplier` on the zero
-address.
+### `unindexed-event-address` on `PolicySet` — fixed
 
-Fix at next deployment: `if (_agent == address(0)) revert BadSupplier();` —
-or a dedicated `BadAgent` error.
+`PolicySet(address agent, ...)` had no indexed parameters, so a log consumer
+could not filter policy changes by the agent they applied to. Now
+`event PolicySet(address indexed agent, ...)`, with a test that filters the
+log by agent and asserts it gets one entry rather than both.
 
-### `unindexed-event-address` on `PolicySet`
+### What is left
 
-`PolicySet(address agent, uint128 monthlyCap, uint128 autoApproveMax)` has no
-indexed parameters, so a log consumer cannot filter policy changes by agent.
-An observability gap, not a correctness one — the state is readable from
-`agent()` at any time.
-
-Fix at next deployment: `event PolicySet(address indexed agent, ...)`.
+One `missing-zero-check`, on `nominatePlant`, which is a false positive — see
+below. Nothing else.
 
 ## Excluded, with reasons
 
@@ -74,7 +70,7 @@ a comparison between two stored timestamps, not against `block.timestamp`.
 
 ### `missing-zero-check` on `nominatePlant(nominee)`
 
-A false positive here. The zero address is the documented way to call off a
+The one still reported, and a false positive. The zero address is the documented way to call off a
 handover that has not been accepted — guarding it would remove the ability to
 cancel a nomination, which is the safety property the two-step handover exists
 to provide.

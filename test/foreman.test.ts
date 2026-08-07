@@ -529,4 +529,59 @@ describe("Foreman", () => {
       "Underfunded",
     );
   });
+
+  /* Slither's missing-zero-check, acted on. Setting the agent to the zero
+     address disabled the autonomous lane silently — recoverable by the plant,
+     but inconsistent with setSupplier, which has always refused it. */
+  it("refuses to set the agent to nobody", async () => {
+    const { plant, foreman } = await deploy();
+
+    await expectRevert(
+      foreman.write.setPolicy([ZERO, CAP, AUTO], { account: plant.account }),
+      "BadAgent",
+    );
+  });
+
+  it("refuses to deploy with no agent at all", async () => {
+    const [plant] = await viem.getWalletClients();
+    const token = await viem.deployContract("MockUSDC");
+
+    await expectRevert(
+      viem.deployContract("Foreman", [token.address, ZERO, CAP, AUTO], {
+        client: { wallet: plant },
+      }),
+      "BadAgent",
+    );
+  });
+
+  /* Revoking the agent is a cap of zero, which says so on chain rather than
+     leaving an address nobody can sign for. */
+  it("still lets the plant stand the agent down, by zeroing its budget", async () => {
+    const { plant, agent, supplier, foreman } = await deploy();
+
+    await foreman.write.setPolicy([agent.account.address, 0n, AUTO], { account: plant.account });
+    assert.equal(await foreman.read.remainingBudget(), 0n);
+
+    await expectRevert(
+      foreman.write.proposePO([7, "6205-2RS", supplier.account.address, usdc(180), 58], {
+        account: agent.account,
+      }),
+      "CapExceeded",
+    );
+  });
+
+  /* Slither's unindexed-event-address, acted on. A log consumer could not
+     filter policy changes by the agent they applied to. */
+  it("indexes the agent on PolicySet, so the log can be filtered by it", async () => {
+    const { plant, agent, outsider, foreman } = await deploy();
+
+    await foreman.write.setPolicy([outsider.account.address, CAP, AUTO], {
+      account: plant.account,
+    });
+    await foreman.write.setPolicy([agent.account.address, CAP, AUTO], { account: plant.account });
+
+    const mine = await foreman.getEvents.PolicySet({ agent: agent.account.address });
+    assert.equal(mine.length, 1, "filtering by agent must return only that agent's change");
+    assert.equal(mine[0].args.agent?.toLowerCase(), agent.account.address.toLowerCase());
+  });
 });

@@ -154,23 +154,24 @@ The natural next step is a paid pilot with one Malaysian precision-machining pla
 **Contract address & deployed link**
 
 ```
-Foreman: 0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9
-https://sepolia.basescan.org/address/0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9
+Foreman: 0x6cc8fafc87328a087ac0da2d0c8cae7f9bec2e9a
+https://sepolia.basescan.org/address/0x6cc8fafc87328a087ac0da2d0c8cae7f9bec2e9a
 
 Verified source:
-https://base-sepolia.blockscout.com/address/0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9#code
+https://base-sepolia.blockscout.com/address/0x6cc8fafc87328a087ac0da2d0c8cae7f9bec2e9a#code
 
-USDC (mock): 0xc4798b4385c4c0c22e3eeac9fb5efa560883d501
-https://sepolia.basescan.org/address/0xc4798b4385c4c0c22e3eeac9fb5efa560883d501
+USDC (mock): 0x4944908fa528e017340df511dbae5bbb8dc91720
+https://sepolia.basescan.org/address/0x4944908fa528e017340df511dbae5bbb8dc91720
 ```
 
 Transactions a judge can check without running anything:
 
 | What it shows | Transaction |
 |---|---|
-| Agent signs a $180 bearing alone — `Proposed` and `Funded` in one transaction | [`0x4b5193a6…`](https://sepolia.basescan.org/tx/0x4b5193a67ff997c869980596adc686a30f751c947225c27f5b6dea0d6e002e81) |
-| Agent stops at a $4,000 spindle — `Proposed` only, no money moved | [`0x6f553926…`](https://sepolia.basescan.org/tx/0x6f55392627d4f6eb5d0de5f55a4d323093e37c4504cd1d86b4aba43f88f2dae0) |
-| A human approves it — separate transaction, separate key, budget untouched | [`0xe502ecb2…`](https://sepolia.basescan.org/tx/0xe502ecb2105e5d3d9e8cee8dfe30cdcc7e60b19cc08dd756e2efb289e4868e3d) |
-| Supplier commits to a waybill on despatch | [`0xdd206882…`](https://sepolia.basescan.org/tx/0xdd206882bff9d441a97a8e9f259542c09bc267b7b4d2873bc1d0f6f55862b074) |
-| Supplier paid once goods-in matched it | [`0x31d25b24…`](https://sepolia.basescan.org/tx/0x31d25b24ab0b6c757d36cca4f06de055b317284a5c41fc07b56dcd77fcecca46) |
-| The part is issued to the machine | [`0xf45af170…`](https://sepolia.basescan.org/tx/0xf45af170bc3e2cf37a51dc6ee537958de25e9974174726ac0ec7859d0ceb4ca8) |
+| Agent signs a $180 bearing alone — `Proposed` and `Funded` in one transaction, because it is under the ceiling | [`0x26e3e684…`](https://sepolia.basescan.org/tx/0x26e3e68400067772bde0b556245b3614d72b1693b81782960d58af2cd28ca0b6) |
+| Agent stops at a $4,000 spindle — `Proposed` only. No `Funded` event, no money moved | [`0x6710c125…`](https://sepolia.basescan.org/tx/0x6710c1252d52004dc11f99558f0ea4e661ba33b1a9b394d51727199c1ab50707) |
+| A human approves it — a separate transaction from a separate key, and the agent's budget is untouched: the cap bounds the agent, not the plant | [`0xea977baf…`](https://sepolia.basescan.org/tx/0xea977baf240626397d6a95036f986fcd931ebb0bde93ad85d28a9b109c6df251) |
+| Supplier commits to a waybill on despatch — the `Shipped` event carries the document hash | [`0xb263725c…`](https://sepolia.basescan.org/tx/0xb263725c6e3f3c98db5d5a040e0dc66221d8cb6fdf7d295cc36fee89a53bc366) |
+| Supplier paid once goods-in matched it | [`0xd64e789c…`](https://sepolia.basescan.org/tx/0xd64e789c6c7d7acc1590e593f729bcd88ad4d09fbdf5ccf8e030f0087d128df9) |
+| The part is issued to the machine — it leaves the store, which is what lets the agent order the next one | [`0x64db40fa…`](https://sepolia.basescan.org/tx/0x64db40fad8f23cd7f4f84e5abb42d2cb741695088a78d495451713c5cd74fd70) |
+| The plant cancels a funded order — escrow and the agent's budget both come back | [`0xa33292d7…`](https://sepolia.basescan.org/tx/0xa33292d7e28546f0c82046e3913ff2df4aca190f1f96d39881527a08623aedce) |

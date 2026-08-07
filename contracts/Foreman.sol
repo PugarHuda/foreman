@@ -104,7 +104,7 @@ contract Foreman {
 
     PO[] private _pos;
 
-    event PolicySet(address agent, uint128 monthlyCap, uint128 autoApproveMax);
+    event PolicySet(address indexed agent, uint128 monthlyCap, uint128 autoApproveMax);
     event SupplierSet(address indexed supplier, bool approved);
     event Deposited(uint128 amount);
     event Withdrawn(uint128 amount);
@@ -123,6 +123,7 @@ contract Foreman {
     error BadStatus();
     error BadAmount();
     error BadSupplier();
+    error BadAgent();
     error SupplierNotApproved();
     error NoDeliveryRef();
     error DeliveryRefMismatch();
@@ -139,6 +140,7 @@ contract Foreman {
     }
 
     constructor(IERC20 _token, address _agent, uint128 _monthlyCap, uint128 _autoApproveMax) {
+        if (_agent == address(0)) revert BadAgent();
         token = _token;
         plant = msg.sender;
         agent = _agent;
@@ -166,7 +168,13 @@ contract Foreman {
 
     // --- policy ---
 
+    /// @notice Retune the spend permission, or hand the agent lane to a new key.
+    /// @dev The zero address is rejected rather than accepted as "no agent":
+    /// it would disable the autonomous lane silently, and `setSupplier`
+    /// already refuses it for the same reason. Revoking the agent is
+    /// `monthlyCap = 0`, which says so out loud and is readable on chain.
     function setPolicy(address _agent, uint128 _monthlyCap, uint128 _autoApproveMax) external onlyPlant {
+        if (_agent == address(0)) revert BadAgent();
         agent = _agent;
         monthlyCap = _monthlyCap;
         autoApproveMax = _autoApproveMax;
