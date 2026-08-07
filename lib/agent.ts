@@ -216,8 +216,8 @@ async function dispatch(
         const r = records.find((x) => x.supplier === q.supplier);
         return {
           ...q,
-          delivered_before: r?.delivered ?? null,
-          cancelled_before: r?.cancelled ?? null,
+          despatched_before: r?.despatched ?? null,
+          late_before: r?.late ?? null,
           reliability: r?.reliability ?? null,
         };
       });
@@ -228,14 +228,14 @@ async function dispatch(
         detail:
           withHistory
             .map((q) => {
-              const settled = (q.delivered_before ?? 0) + (q.cancelled_before ?? 0);
+              const judged = (q.despatched_before ?? 0) + (q.late_before ?? 0);
               // Too little history is not the same as a bad record.
               const rate =
                 q.reliability !== null
-                  ? `${Math.round(q.reliability * 100)}% delivered over ${settled}`
-                  : settled > 0
-                    ? `${q.delivered_before} of ${settled} delivered, too few to rate`
-                    : "nothing settled yet";
+                  ? `${Math.round(q.reliability * 100)}% shipped on time over ${judged}`
+                  : judged > 0
+                    ? `${q.despatched_before} of ${judged} shipped on time, too few to rate`
+                    : "nothing shipped yet";
               return `${q.supplier} $${q.priceUsd} / ${q.leadTimeHours}h · ${rate}`;
             })
             .join("\n") || "none",
@@ -244,10 +244,15 @@ async function dispatch(
       return { part_no: args.part_no, quotes: withHistory };
     }
     case "create_purchase_order": {
+      const offered = getQuotes(args.part_no);
+      const payable = offered.map((q) => ({ supplier: q.supplier, address: q.address, price_usd: q.priceUsd }));
+
       // The contract rejects an unvetted payee anyway. Catching it here just
       // gives the model something it can act on instead of a raw revert.
-      const known = getQuotes(args.part_no).map((q) => q.address.toLowerCase());
-      if (!known.includes(String(args.supplier_address).toLowerCase())) {
+      const quote = offered.find(
+        (q) => q.address.toLowerCase() === String(args.supplier_address).toLowerCase(),
+      );
+      if (!quote) {
         record({
           kind: "tool",
           label: "create_purchase_order rejected",
@@ -255,10 +260,27 @@ async function dispatch(
         });
         return {
           error: "supplier_address is not on the plant's approved list for this part",
-          approved_suppliers: getQuotes(args.part_no).map((q) => ({
-            supplier: q.supplier,
-            address: q.address,
-          })),
+          approved_suppliers: payable,
+        };
+      }
+
+      /* The plant sets the price; the agent only chooses whose price to take.
+         Nothing on chain binds the amount to the quote — approvedSupplier says
+         who may be paid, monthlyCap says how much in total, and between those
+         two an agent that typed 1800 instead of 180 would have overpaid a
+         perfectly vetted supplier by a decimal point, inside budget, with
+         every guarantee in the README intact. A quote is a number to pick,
+         not one to write. */
+      if (Number(args.amount_usd) !== quote.priceUsd) {
+        record({
+          kind: "tool",
+          label: "create_purchase_order rejected",
+          detail: `$${args.amount_usd} is not ${quote.supplier}'s quoted price of $${quote.priceUsd} for ${args.part_no}`,
+        });
+        return {
+          error: "amount_usd must be exactly the supplier's quoted price for this part",
+          quoted_price_usd: quote.priceUsd,
+          approved_suppliers: payable,
         };
       }
 
@@ -311,7 +333,9 @@ Work through three separate decisions in order. Do not merge them.
    - projected RUL is inside planning_horizon_hours.
    A part already on its way covers the machine just as well as one on the shelf. If "covered" is above zero, say so and order nothing. If the failure is beyond the horizon, say so and order nothing. Otherwise do not wait for the last possible moment: waiting never makes the part cheaper, and a lead time that slips costs a shift.
 
-3. WHICH SUPPLIER? Among suppliers whose lead time is shorter than the RUL, take the cheapest — unless one of them has a reliability on record below 0.7, in which case prefer the next cheapest that does not and say why. Price and lead time are what a supplier promises; delivered_before and reliability are what they have actually done. A null reliability means too little history to judge, not a bad one. If no supplier can beat the RUL, take the fastest and say plainly that the part will land late.
+3. WHICH SUPPLIER? Among suppliers whose lead time is shorter than the RUL, take the cheapest — unless one of them has a reliability on record below 0.7, in which case prefer the next cheapest that does not and say why. Price and lead time are what a supplier promises; despatched_before and reliability are whether they have met that promise before. A null reliability means too little history to judge, not a bad one. If no supplier can beat the RUL, take the fastest and say plainly that the part will land late.
+
+Place the order at the supplier's quoted price exactly. You do not negotiate and you do not set amounts: amount_usd is the priceUsd on the quote you chose.
 
 Also:
 - Never trust a trend with r² below 0.7. Report it and take no action on that machine.
@@ -340,7 +364,7 @@ export interface AgentDeps {
    */
   onStep?: (step: AgentStep) => void;
   readOrders?: () => Promise<{
-    pos: readonly { partNo: string; status: string; supplier: string }[];
+    pos: readonly { partNo: string; status: string; supplier: string; since: number }[];
   }>;
   placeOrder?: (
     machineId: number,

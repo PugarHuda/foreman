@@ -152,8 +152,10 @@ export function waybillFor(poId: number): string {
 
 export interface SupplierRecord {
   supplier: string;
-  delivered: number;
-  cancelled: number;
+  /** Orders they actually got out of the door: Shipped, Released or Fitted. */
+  despatched: number;
+  /** Funded, promised by a lead time that has since passed, still not shipped. */
+  late: number;
   /** 0..1, or null when there is not enough history to say anything. */
   reliability: number | null;
 }
@@ -165,22 +167,40 @@ export interface SupplierRecord {
  * has actually performed is a query, not a spreadsheet somebody updates and
  * nobody trusts. A plant switching suppliers can carry this record with it;
  * the supplier cannot quietly revise it.
+ *
+ * Scored on despatch against the lead time they quoted, and on nothing else.
+ * The earlier version scored delivered-versus-cancelled, which was measuring
+ * the wrong party: a supplier cannot cancel anything here — only the plant can
+ * (`cancelPO`) and only a proposal nobody answered lapses (`expireProposal`).
+ * Every cancellation was therefore the plant's own decision, and counting it
+ * dragged the supplier under the 0.7 line the agent routes on. A human
+ * declining two spindles made the spindle supplier look unreliable.
+ *
+ * ponytail: a Funded order carries its funding time in `since`, which is why
+ * lateness is readable without touching the chain twice. Once an order ships,
+ * `since` moves on and how long it took is gone — read the Funded and Shipped
+ * events if a plant ever needs the historic figure rather than the live one.
  */
 export function supplierRecords(
-  pos: readonly { supplier: string; status: string }[],
+  pos: readonly { supplier: string; status: string; since: number }[],
   quotes: readonly Quote[],
+  nowSeconds: number = Date.now() / 1000,
 ): SupplierRecord[] {
   return quotes.map((q) => {
     const theirs = pos.filter((p) => p.supplier.toLowerCase() === q.address.toLowerCase());
-    const delivered = theirs.filter((p) => p.status === "Released" || p.status === "Fitted").length;
-    const cancelled = theirs.filter((p) => p.status === "Cancelled").length;
-    const settled = delivered + cancelled;
+    const despatched = theirs.filter(
+      (p) => p.status === "Shipped" || p.status === "Released" || p.status === "Fitted",
+    ).length;
+    const late = theirs.filter(
+      (p) => p.status === "Funded" && nowSeconds - p.since > q.leadTimeHours * 3600,
+    ).length;
+    const judged = despatched + late;
     return {
       supplier: q.supplier,
-      delivered,
-      cancelled,
+      despatched,
+      late,
       // One order is an anecdote. Say nothing until there is a pattern.
-      reliability: settled >= 3 ? delivered / settled : null,
+      reliability: judged >= 3 ? despatched / judged : null,
     };
   });
 }

@@ -36,7 +36,7 @@ function scripted(replies: unknown[]) {
 const emptyBook = async () => ({ pos: [] });
 
 /** A chain that accepts orders and remembers them. */
-function fakeChain(pos: { partNo: string; status: string }[] = []) {
+function fakeChain(pos: { partNo: string; status: string; supplier: string; since: number }[] = []) {
   const placed: { partNo: string; amountUsd: number }[] = [];
   return {
     placed,
@@ -203,6 +203,21 @@ describe("placing an order", () => {
     assert.ok(result.approved_suppliers.length > 0, "tell the model who it may pay");
   });
 
+  /* The allowlist bounds who gets paid and the cap bounds the total. Neither
+     binds the figure, so a decimal point in the wrong place was a vetted
+     supplier being handed ten times their quote, inside budget. */
+  it("refuses to pay a vetted supplier an amount they did not quote", async () => {
+    const chain = fakeChain();
+    const { chat, seen } = scripted([reply("Ordering.", [order(1800)]), reply("Stopped.")]);
+
+    await runAgent(300, { chat, ...chain });
+
+    assert.deepEqual(chain.placed, [], "the write must never be attempted");
+    const result = JSON.parse(toolReplies(seen[1])[0].content);
+    assert.match(result.error, /quoted price/);
+    assert.equal(result.quoted_price_usd, getQuotes("6205-2RS")[0].priceUsd);
+  });
+
   it("tells the model not to retry an order that may already be on chain", async () => {
     const { chat, seen } = scripted([reply("Ordering.", [order(180)]), reply("Could not order.")]);
 
@@ -259,8 +274,8 @@ describe("degraded chain", () => {
 
   it("counts a part already in transit as covered", async () => {
     const chain = fakeChain([
-      { partNo: "6205-2RS", status: "Funded" },
-      { partNo: "6205-2RS", status: "Cancelled" },
+      { partNo: "6205-2RS", status: "Funded", supplier: APPROVED, since: 0 },
+      { partNo: "6205-2RS", status: "Cancelled", supplier: APPROVED, since: 0 },
     ]);
     const { chat, seen } = scripted([
       reply("Checking.", [{ name: "check_inventory", args: { part_no: "6205-2RS" } }]),

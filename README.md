@@ -123,7 +123,8 @@ sequence is the part worth watching.
 | Plant cannot be stiffed | escrow only releases on `confirmReceipt` or that timeout |
 | A forgotten decision cannot block a line for good | An open order blocks its machine-and-part line; `expireProposal` lets anyone clear one nobody answered after 7 days. A proposal holds no escrow, so there is nothing to steal by expiring it |
 | The audit trail is checkable, not just printable | `/api/audit` exports the order book as CSV, every row naming the contract it came from. An auditor can re-derive any line from a block explorer instead of trusting the file |
-| Supplier reliability is derived, not maintained | `supplierRecords` reads delivered-versus-cancelled straight off the order book. Nobody keeps the scorecard, so nobody can quietly revise it, and a plant switching systems carries it with them |
+| Agent cannot invent a price either | The allowlist binds who is paid and the cap binds the monthly total; between them, a decimal in the wrong place was a vetted supplier handed ten times their quote, inside budget. `create_purchase_order` now refuses any `amount_usd` that is not the quoted price. The agent chooses whose price to take, it does not write one |
+| Supplier reliability is derived, not maintained | `supplierRecords` scores despatch against the lead time the supplier quoted, straight off the order book. Nobody keeps the scorecard, so nobody can quietly revise it, and a plant switching systems carries it with them. It deliberately ignores cancellations: only the plant can cancel, so scoring them rated the plant's own decisions and dragged suppliers under the line the agent routes on |
 | The panel is readable, not just tidy | Every text tier clears WCAG AA on every surface it lands on, checked in `test/contrast.test.ts`. The old third tier sat at 2.8:1 while carrying machine names, status badges and the ISO zone labels |
 | A cancelled order does not burn the month | `cancelPO` refunds budget and escrow |
 
@@ -200,8 +201,8 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 72 contract + unit tests, in-process EVM, no node needed
-npm run test:e2e  # 30 browser tests, against localhost or a deployed instance
+npm test          # 74 contract + unit tests, in-process EVM, no node needed
+npm run test:e2e  # 31 browser tests, against localhost or a deployed instance
 ```
 
 The agent loop is tested too, with the model replaced by a script: that it

@@ -66,7 +66,11 @@ function avoidedUsd(
   }[],
   machines: { id: number; rulHours: number | null }[],
 ): number {
-  const inFlight = new Set(["Funded", "Shipped", "Released"]);
+  /* Money committed to a part that has not reached the store yet. Released and
+     Fitted are deliberately out: those savings are banked, and counting one
+     but not the other made the strip drop at goods-in for a delivered order
+     and again at fitting — the same order leaving "in flight" twice. */
+  const inFlight = new Set(["Funded", "Shipped"]);
 
   // Per machine, not per order. One asset's downtime can only be bought back
   // once — two orders against the same machine do not save it twice, so take

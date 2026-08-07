@@ -55,12 +55,12 @@ const cash = (n: number | undefined | null) => (n == null ? "—" : money(n));
 /** What a supplier has actually done, straight off the order book. */
 function record(data: State | null, supplier: string): string {
   const r = data?.supplierRecords?.find((x) => x.supplier === supplier);
-  if (!r || r.delivered + r.cancelled === 0) return "no orders settled yet";
-  const settled = r.delivered + r.cancelled;
-  const rate = r.reliability === null ? null : `${Math.round(r.reliability * 100)}% delivered`;
+  const judged = (r?.despatched ?? 0) + (r?.late ?? 0);
+  if (!r || judged === 0) return "nothing shipped yet";
+  const rate = r.reliability === null ? null : `${Math.round(r.reliability * 100)}% shipped on time`;
   return rate
-    ? `${rate} across ${settled} orders`
-    : `${r.delivered} of ${settled} delivered — too few to rate`;
+    ? `${rate} across ${judged} orders`
+    : `${r.despatched} of ${judged} shipped on time — too few to rate`;
 }
 
 /**
@@ -146,8 +146,8 @@ interface State {
   quotes: { supplier: string; priceUsd: number; leadTimeHours: number }[];
   supplierRecords: {
     supplier: string;
-    delivered: number;
-    cancelled: number;
+    despatched: number;
+    late: number;
     reliability: number | null;
   }[];
   avoidedUsd: number;

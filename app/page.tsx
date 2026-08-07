@@ -1,12 +1,32 @@
 import Image from "next/image";
 import Link from "next/link";
 import shot from "../docs/dashboard.png";
+import { FOREMAN_ADDRESS, USDC_ADDRESS, EXPLORER } from "@/lib/deployment.ts";
+import { PLANNING_HORIZON_HOURS } from "@/lib/plant.ts";
+import { getState } from "@/lib/chain.ts";
 
 /* The same README still, imported straight out of docs/ rather than copied
    into public/ — one file, and record-demo.mjs keeps both in sync. */
 
-const FOREMAN = "0xaf34fcad7034ce9f220e71946e4fdf399bc07ca9";
-const USDC = "0xc4798b4385c4c0c22e3eeac9fb5efa560883d501";
+/* Re-read hourly rather than on every visit. The pitch numbers are policy, not
+   telemetry: they change when someone calls setPolicy, which is not something
+   that happens between two page loads. */
+export const revalidate = 3600;
+
+/* A landing page quoting $2,000 while the contract says otherwise is the
+   drift this repo checks for everywhere else. Read the policy off chain and
+   fall back to the deployed figures only when the RPC will not answer. */
+async function policy() {
+  try {
+    const { monthlyCapUsd, autoApproveMaxUsd } = await getState();
+    return { cap: monthlyCapUsd, ceiling: autoApproveMaxUsd, live: true };
+  } catch {
+    return { cap: 2000, ceiling: 500, live: false };
+  }
+}
+
+const money = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 /* The severity bands, laid out proportionally, exactly as the machine cards
    draw them. This is the only colour on the page: it means machine health
@@ -18,7 +38,9 @@ const BANDS = [
   { zone: "D", span: 29, color: "var(--zone-d)" },
 ];
 
-export default function Landing() {
+export default async function Landing() {
+  const { cap, ceiling } = await policy();
+
   return (
     <div className="shell landing">
       <header className="masthead">
@@ -50,33 +72,33 @@ export default function Landing() {
           </a>
           <a
             className="btn"
-            href={`https://base-sepolia.blockscout.com/address/${FOREMAN}#code`}
+            href={`https://base-sepolia.blockscout.com/address/${FOREMAN_ADDRESS}#code`}
           >
             Read the contract
           </a>
         </div>
         <p className="warn">
           The control room is wired to Base Sepolia and spends real testnet money on your behalf.
-          That is deliberate: the agent key holds 0.002 ETH of gas, the permission caps it at $2,000
-          a month, and nothing above $500 executes without a second key. A stranger hammering the
-          button is bounded by the same contract the plant relies on.
+          That is deliberate: the agent key holds 0.002 ETH of gas, the permission caps it at{" "}
+          {money(cap)} a month, and nothing above {money(ceiling)} executes without a second key. A
+          stranger hammering the button is bounded by the same contract the plant relies on.
         </p>
       </section>
 
       <div className="strip">
         <div>
           <div className="eyebrow">Agent budget</div>
-          <div className="value">$2,000</div>
+          <div className="value">{money(cap)}</div>
           <div className="sub">per rolling 30 days, enforced on chain</div>
         </div>
         <div>
           <div className="eyebrow">Signs alone up to</div>
-          <div className="value">$500</div>
+          <div className="value">{money(ceiling)}</div>
           <div className="sub">above this, a human approves</div>
         </div>
         <div>
           <div className="eyebrow">Failure horizon</div>
-          <div className="value">72 h</div>
+          <div className="value">{PLANNING_HORIZON_HOURS} h</div>
           <div className="sub">inside it, the agent may act</div>
         </div>
         <div>
@@ -204,14 +226,14 @@ export default function Landing() {
         <div className="body">
           <p className="addr">
             <span>Foreman</span>
-            <a href={`https://sepolia.basescan.org/address/${FOREMAN}`}>
-              <code>{FOREMAN}</code>
+            <a href={`${EXPLORER}/address/${FOREMAN_ADDRESS}`}>
+              <code>{FOREMAN_ADDRESS}</code>
             </a>
           </p>
           <p className="addr">
             <span>USDC (mock)</span>
-            <a href={`https://sepolia.basescan.org/address/${USDC}`}>
-              <code>{USDC}</code>
+            <a href={`${EXPLORER}/address/${USDC_ADDRESS}`}>
+              <code>{USDC_ADDRESS}</code>
             </a>
           </p>
           <p className="fine">

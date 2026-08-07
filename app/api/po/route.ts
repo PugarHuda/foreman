@@ -37,6 +37,12 @@ const REVERTS: Record<string, string> = {
   TooEarly: "The receipt timeout has not elapsed yet.",
   BadAmount: "That amount is not valid.",
   BadSupplier: "That supplier address is not valid.",
+  AlreadyOnOrder: "That machine already has an open order for that part.",
+  DeliveryRefMismatch:
+    "The reference goods-in submitted does not match the document the supplier committed to on despatch.",
+  NoDeliveryRef: "A despatch must name the document that proves it.",
+  BadPartNo: "That part number is empty or too long to store.",
+  NotNominated: "Only the nominated key may accept the plant role.",
 };
 
 function explain(e: unknown): string {

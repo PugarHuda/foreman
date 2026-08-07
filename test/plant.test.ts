@@ -70,48 +70,77 @@ describe("supplier record", () => {
     { supplier: "Reliable Ltd", address: "0xaaa" as `0x${string}`, priceUsd: 100, leadTimeHours: 24 },
     { supplier: "Flaky Ltd", address: "0xbbb" as `0x${string}`, priceUsd: 90, leadTimeHours: 24 },
   ];
-  const order = (address: string, status: string) => ({ supplier: address, status, partNo: "x" });
+  /* A fixed clock, because lateness is measured against one and a test that
+     reads the wall is a test that fails at midnight. */
+  const NOW = 1_000_000;
+  const HOUR = 3600;
+  const order = (address: string, status: string, agedHours = 0) => ({
+    supplier: address,
+    status,
+    partNo: "x",
+    since: NOW - agedHours * HOUR,
+  });
 
   it("says nothing until there is a pattern", async () => {
     const { supplierRecords } = await import("../lib/plant.ts");
-    const [reliable] = supplierRecords([order("0xaaa", "Released")], quotes);
+    const [reliable] = supplierRecords([order("0xaaa", "Released")], quotes, NOW);
 
-    assert.equal(reliable.delivered, 1);
+    assert.equal(reliable.despatched, 1);
     assert.equal(reliable.reliability, null, "one order is an anecdote, not a rating");
   });
 
-  it("rates a supplier once enough orders have settled", async () => {
+  it("rates a supplier once enough orders can be judged", async () => {
     const { supplierRecords } = await import("../lib/plant.ts");
     const pos = [
       order("0xaaa", "Released"),
       order("0xaaa", "Fitted"),
-      order("0xaaa", "Released"),
+      order("0xaaa", "Shipped"),
+      // Took the order, promised 24 hours, still has not despatched.
+      order("0xbbb", "Funded", 100),
+      order("0xbbb", "Funded", 100),
+      order("0xbbb", "Released"),
+    ];
+    const [reliable, flaky] = supplierRecords(pos, quotes, NOW);
+
+    assert.equal(reliable.reliability, 1, "a fitted part was still despatched");
+    assert.equal(flaky.reliability, 1 / 3);
+    assert.equal(flaky.late, 2);
+  });
+
+  /* The bug this replaced: only the plant can cancel an order — a supplier has
+     no way to. Scoring cancellations pushed a supplier under the 0.7 line the
+     agent routes on, for decisions the plant made. */
+  it("does not blame a supplier for the plant's own cancellations", async () => {
+    const { supplierRecords } = await import("../lib/plant.ts");
+    const pos = [
+      order("0xbbb", "Cancelled"),
       order("0xbbb", "Cancelled"),
       order("0xbbb", "Cancelled"),
       order("0xbbb", "Released"),
     ];
-    const [reliable, flaky] = supplierRecords(pos, quotes);
+    const [, flaky] = supplierRecords(pos, quotes, NOW);
 
-    assert.equal(reliable.reliability, 1, "a fitted part counts as delivered");
-    assert.equal(flaky.reliability, 1 / 3);
+    assert.equal(flaky.despatched, 1);
+    assert.equal(flaky.late, 0);
+    assert.equal(flaky.reliability, null, "three plant decisions are not a supplier's record");
   });
 
-  it("ignores orders still in flight", async () => {
+  it("does not call an order late while it is still inside the lead time", async () => {
     const { supplierRecords } = await import("../lib/plant.ts");
-    const pos = [order("0xaaa", "Funded"), order("0xaaa", "Shipped"), order("0xaaa", "Proposed")];
-    const [reliable] = supplierRecords(pos, quotes);
+    const pos = [order("0xaaa", "Funded", 4), order("0xaaa", "Proposed", 900)];
+    const [reliable] = supplierRecords(pos, quotes, NOW);
 
-    assert.equal(reliable.delivered, 0);
-    assert.equal(reliable.reliability, null, "nothing has settled, so nothing is known");
+    assert.equal(reliable.late, 0, "24 hours were promised and 4 have passed");
+    assert.equal(reliable.reliability, null);
   });
 
   it("does not credit one supplier with another's history", async () => {
     const { supplierRecords } = await import("../lib/plant.ts");
     const pos = [order("0xAAA", "Released"), order("0xaaa", "Released"), order("0xaaa", "Released")];
-    const [reliable, flaky] = supplierRecords(pos, quotes);
+    const [reliable, flaky] = supplierRecords(pos, quotes, NOW);
 
-    assert.equal(reliable.delivered, 3, "address comparison must ignore case");
-    assert.equal(flaky.delivered, 0);
+    assert.equal(reliable.despatched, 3, "address comparison must ignore case");
+    assert.equal(flaky.despatched, 0);
   });
 });
 
