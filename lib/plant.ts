@@ -134,7 +134,8 @@ export function getStock(partNo: string): number {
  * the goods — the supplier commits its hash on despatch, and goods-in reads
  * the paper and submits the same reference. Derived from the order id here so
  * the demo carries no hidden state and survives a page reload; swapping in a
- * carrier API changes this one function.
+ * carrier API changes this one function — which is what carrierWaybill below
+ * does when CARRIER_API_URL is set.
  */
 export function waybillFor(poId: number): string {
   // A reference anyone can compute proves nothing: a supplier who never
@@ -148,6 +149,41 @@ export function waybillFor(poId: number): string {
     h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
   }
   return `WB-${String(poId).padStart(4, "0")}-${h.toString(36).toUpperCase().padStart(7, "0")}`;
+}
+
+/**
+ * The real thing, when a carrier is wired in.
+ *
+ * `GET $CARRIER_API_URL/waybill/:poId -> { "waybill": "MYKUL0099213" }`
+ *
+ * This is the number physically printed on the consignment note travelling
+ * with the goods, which is the whole point of the delivery-reference check:
+ * goods-in reads paper that arrived on a pallet, and the contract will not
+ * release escrow unless it matches what the supplier committed to on
+ * despatch. Deriving it from the order id makes the demo self-contained; a
+ * carrier makes it evidence.
+ *
+ * Falls back to the derived reference when no carrier is configured, and
+ * throws rather than falling back when one is configured and unreachable —
+ * silently reverting to a guessable reference would turn the check back into
+ * ceremony at exactly the moment nobody is watching.
+ */
+export async function resolveWaybill(poId: number): Promise<string> {
+  const base = process.env.CARRIER_API_URL;
+  if (!base) return waybillFor(poId);
+
+  const token = process.env.CARRIER_API_TOKEN;
+  const res = await fetch(`${base.replace(/\/$/, "")}/waybill/${poId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    throw new Error(`carrier API: ${res.status} for order ${poId}`);
+  }
+  const body = (await res.json()) as { waybill?: unknown };
+  const waybill = typeof body.waybill === "string" ? body.waybill.trim() : "";
+  if (!waybill) throw new Error(`carrier API returned no waybill for order ${poId}`);
+  return waybill;
 }
 
 export interface SupplierRecord {

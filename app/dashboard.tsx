@@ -237,6 +237,30 @@ export default function Dashboard() {
     load();
   }, [load]);
 
+  /* The trace used to vanish on reload — it only ever existed in this
+     component's state. The journal has it, so show the last assessment
+     rather than an empty panel that reads as "the agent has never run". */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/runs?limit=1", { cache: "no-store" });
+        if (!res.ok) return;
+        const { runs } = await res.json();
+        const last = runs?.[0];
+        if (!last || cancelled) return;
+        setSteps(last.steps ?? []);
+        setSummary(last.summary ?? "");
+        setRanAtHour(last.hours ?? null);
+      } catch {
+        /* No journal on this deployment. The panel is still usable. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function runAgent() {
     setBusy("agent");
     setError(null);

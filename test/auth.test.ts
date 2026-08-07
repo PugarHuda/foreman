@@ -48,7 +48,7 @@ describe("session token", () => {
 
   it("rejects one that has expired", () => {
     const now = Date.parse("2026-01-01T00:00:00Z");
-    const token = issueSession(now);
+    const token = issueSession("operator", now);
     assert.equal(validSession(token, now + 60_000), true);
     assert.equal(validSession(token, now + 13 * 3_600_000), false);
   });

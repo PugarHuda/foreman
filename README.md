@@ -201,12 +201,12 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 112 contract + unit tests, in-process EVM, no node needed
+npm test          # 143 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 
 # The pilot surfaces — ingest, the asset register, an ERP, a real login —
 # need an instance started in pilot configuration, so they are skipped unless
-# you point them at one. 22 pilot tests, happy path and wrong path.
+# you point them at one. 33 pilot tests, happy path and wrong path.
 PILOT_BASE_URL=http://localhost:3000 PILOT_TELEMETRY_TOKEN=… PILOT_PASSWORD=…   npx playwright test pilot
 ```
 
@@ -388,6 +388,72 @@ this repo deploys, which would settle every invoice in tokens nobody accepts.
 when a supplier key is on the plant's server. A supervised pilot may
 reasonably accept both, and being unable to start is its own kind of failure.
 
+### 7. Running it unattended
+
+The last three pieces turn a panel somebody watches into a thing that watches
+a line.
+
+**Notifications.** `NOTIFY_WEBHOOK_URL` gets a JSON POST carrying a `text`
+field, so Slack and Discord render it and everything else reads the structured
+fields beside it. It fires when an order needs a human, when a machine stops
+reporting, when a run fails, and once per scheduled assessment. One webhook
+rather than an integration per destination, with a per-key cooldown so a
+polling dashboard does not page anyone sixty times an hour.
+
+**The schedule.** `POST /api/cron` with `CRON_TOKEN` runs a shift assessment
+at the newest hour on record — not a pinned one, or a schedule would assess
+the same moment every night for the rest of the pilot. `vercel.json` declares
+06:00/14:00/22:00; on-prem it is a crontab line. Deliberately not an
+in-process timer: a timer inside a web server fires twice with two instances
+and not at all while it is redeploying.
+
+**The journal.** `JOURNAL_DIR` holds two append-only JSONL files. `runs.jsonl`
+is what the agent decided and why — previously live-only, streamed to whoever
+had the panel open and gone on reload, which is exactly the record an auditor
+asks for later. `actions.jsonl` is which operator pressed what: on chain every
+one of those is the plant key, so the chain cannot say which person approved
+the spindle. `GET /api/runs` serves both behind the operator gate, and the
+panel restores the last assessment on load.
+
+### 8. Named operators
+
+`OPERATORS_FILE` is a JSON array of `{ name, hash }` from `npm run passwd`. A
+lone `OPERATOR_PASSWORD_HASH` still works and reads as one account called
+`operator`, so an existing pilot keeps running unedited.
+
+The session names who is signed in, inside the signed payload, and that name
+lands in the journal. Five wrong guesses locks that account for fifteen
+minutes — scrypt already makes each guess cost ~100ms, and this is the rest of
+it. Locking one account does not lock the shift out, and the login does not
+reveal whether a name exists: an unknown operator is still charged a hash
+against a throwaway salt, so the timing and the message are identical.
+
+### 9. x402 — paying for data, never for goods
+
+`X402_ENABLED=1` lets the agent pay a metered supplier or quote API that
+answers HTTP 402, signing EIP-3009 with the same key the contract knows.
+
+This is deliberately **not** how a spare part is paid for. The whole argument
+here is that goods settle into escrow and release on confirmed receipt;
+pay-now-get-response-now is the model the contract exists to avoid, and
+routing a purchase order through it would quietly undo the thing being
+demonstrated. Two kinds of money, two sets of rules:
+
+| | goods | data |
+|---|---|---|
+| Settles | on-chain escrow, released on receipt | x402, immediately |
+| Payee | allowlisted by the plant | whoever answers the endpoint |
+| Bound by | `monthlyCap`, `autoApproveMax` | `X402_MAX_PER_CALL`, `X402_MAX_TOTAL` |
+
+What it buys is the thing the agent could not do before: it could reason about
+a purchase but could not buy the information to reason with. A supplier feed
+that meters itself no longer needs Foreman onboarded to answer it.
+
+Every refusal is named rather than filtered silently — wrong scheme, wrong
+network, an asset the plant did not authorise, a price over the per-call
+limit. An agent that stops paying for its supplier feed and cannot say which
+rule stopped it is an outage nobody can diagnose.
+
 ### What a pilot still is not
 
 Testnet USDC and an unaudited contract. Both are deliberate: get the plant
@@ -403,11 +469,19 @@ Sepolia with real transactions. The RUL trending — log-linear extrapolation to
 a standards-defined threshold is how condition monitoring actually does it.
 The ISO 10816-3 Class II severity bands. The agent's reasoning and tool calls.
 
+**Real:** the static analysis. `slither` runs on every push and fails the
+build on anything medium or above (`.github/workflows/ci.yml`). That is not an
+audit — it is the floor an audit starts from.
+
 **Real:** the delivery control. The supplier signs a commitment to a document
 reference before the plant can release anything, and a mismatched reference
 reverts. What is staged is only where the reference comes from — it is derived
-from the order id so the demo holds no hidden state. Point `waybillFor` at a
-carrier API or a goods-in scanner and the contract is unchanged.
+from the order id so the demo holds no hidden state. `CARRIER_API_URL` points
+it at the real thing — the number printed on the consignment note travelling
+with the goods — and the contract is unchanged. It throws rather than falling
+back when a carrier is configured and unreachable: silently reverting to a
+guessable reference would turn the check back into ceremony at exactly the
+moment nobody is watching.
 
 **Staged by default, switchable by configuration:** out of the box the
 vibration signal is a seeded replay, and inventory and supplier quotes are
@@ -458,7 +532,8 @@ money on mainnet needs it in one, and needs an audit.
 
 ## Next
 
-- The agent key in a KMS/HSM rather than an environment variable.
+- A third-party audit before real money.
+- Multi-line and multi-plant: one contract, one plant, today.
 - Delivery confirmation from goods-receipt scanning instead of a button.
 - Parametric cover: if the machine reaches Zone D anyway, the same escrow pays
   out a downtime claim. The contract barely changes.

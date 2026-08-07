@@ -19,6 +19,9 @@
  * connector layer above them.
  */
 import fs from "node:fs";
+import { agentSigner } from "./chain.ts";
+import { canonicalUsdc, activeChain } from "./chains.ts";
+import { fetchPaid, x402Enabled } from "./x402.ts";
 import {
   INVENTORY,
   MACHINES,
@@ -56,10 +59,27 @@ export const clearPlantCache = () => cache.clear();
 
 async function get<T>(path: string): Promise<T> {
   const token = process.env.PLANT_API_TOKEN;
-  const res = await fetch(`${apiUrl()}${path}`, {
+  const url = `${apiUrl()}${path}`;
+  const init: RequestInit = {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     signal: AbortSignal.timeout(10_000),
-  });
+  };
+
+  /* A supplier feed that meters itself answers 402 rather than 401. Paying it
+     is a different kind of money from paying for the bearing — see x402.ts —
+     and it stays off unless X402_ENABLED says otherwise. */
+  const res = x402Enabled()
+    ? await fetchPaid(url, init, agentSigner(), {
+        asset: (process.env.X402_ASSET ?? canonicalUsdc() ?? "0x") as `0x${string}`,
+        network: process.env.X402_NETWORK ?? `eip155:${activeChain().id}`,
+      })
+    : await fetch(url, init);
+
+  if (res.status === 402) {
+    throw new Error(
+      `plant API ${path}: payment required and not paid. Set X402_ENABLED=1 and fund the agent, or check X402_MAX_PER_CALL.`,
+    );
+  }
   if (!res.ok) throw new Error(`plant API ${path}: ${res.status} ${(await res.text()).slice(0, 120)}`);
   return res.json() as Promise<T>;
 }

@@ -141,7 +141,7 @@ function, `waybillFor` — the contract does not change.
 | | |
 |---|---|
 | Contract | ~250 lines of code, verified on Blockscout and Sourcify |
-| Test suite | 112 contract + unit (offline), 32 browser, 22 pilot |
+| Test suite | 143 contract + unit (offline), 32 browser, 33 pilot |
 | Agent budget | $2,000 per 30 days, $500 per order without a human |
 | CNC-07 downtime | $890/hour |
 | Bearing | $180, 36h lead · Spindle $4,000, 120h lead |

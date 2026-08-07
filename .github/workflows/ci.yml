@@ -9,6 +9,30 @@ on:
   pull_request:
 
 jobs:
+  # Not an audit. It is the floor an audit starts from: reentrancy, unchecked
+  # transfers, shadowed state, arithmetic. Cheap enough to run on every push,
+  # and a finding here is a finding a human would otherwise have billed for.
+  slither:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # OpenZeppelin's imports have to resolve before anything can analyse them.
+      - run: npm ci
+
+      - uses: crytic/slither-action@v0.4.1
+        id: slither
+        with:
+          target: .
+          slither-config: slither.config.json
+          fail-on: medium
+          slither-args: --filter-paths "node_modules|artifacts"
+
   test:
     runs-on: ubuntu-latest
     steps:

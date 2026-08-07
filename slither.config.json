@@ -1,0 +1,8 @@
+{
+  "//": "Foreman is a small contract with an intentionally plain surface, so almost nothing is excluded. What is here is excluded because the alternative is worse, not because the finding is wrong.",
+  "filter_paths": "node_modules|artifacts|cache",
+  "exclude_informational": true,
+  "exclude_low": true,
+  "detectors_to_exclude": "naming-convention,solc-version,timestamp",
+  "//detectors_to_exclude": "timestamp: every deadline in this contract is a business deadline measured in days — a 14-day supplier claim window, a 7-day proposal TTL, a 30-day budget window. Miner drift of a few seconds cannot matter to any of them, and the alternative is a block-number clock that drifts against the calendar instead."
+}

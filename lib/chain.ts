@@ -13,7 +13,7 @@ import {
   type Abi,
   type Address,
 } from "viem";
-import { waybillFor } from "./plant.ts";
+import { resolveWaybill, waybillFor } from "./plant.ts";
 import { privateKeyToAccount } from "viem/accounts";
 import { FOREMAN_ADDRESS, FOREMAN_ABI, EXPLORER } from "./deployment.ts";
 import { activeChain, rpcUrl } from "./chains.ts";
@@ -75,10 +75,25 @@ export function addressOf(role: Role): Address {
   return accountFor(role).address;
 }
 
+/**
+ * The agent, as something that can sign EIP-712. Used to pay metered data
+ * endpoints over x402 — the same key the contract knows, so anything it
+ * spends on data is spent by an identity the plant already vetted.
+ */
+export function agentSigner() {
+  const account = accountFor("agent");
+  return {
+    address: account.address,
+    signTypedData: (args: Parameters<NonNullable<typeof account.signTypedData>>[0]) =>
+      account.signTypedData!(args),
+  };
+}
+
 const foreman = { address: FOREMAN_ADDRESS as Address, abi: FOREMAN_ABI as unknown as Abi };
 
 /** What the supplier commits to on despatch and goods-in checks on arrival. */
-export const deliveryRefFor = (poId: number) => keccak256(stringToHex(waybillFor(poId)));
+export const deliveryRefFor = async (poId: number) =>
+  keccak256(stringToHex(await resolveWaybill(poId)));
 
 export function txUrl(hash: string) {
   return `${EXPLORER}/tx/${hash}`;
@@ -212,8 +227,8 @@ export const cancelPO = (id: number) => send("plant", "cancelPO", [BigInt(id)]).
 export const fitPart = (id: number) => send("plant", "fitPart", [BigInt(id)]).then((r) => r.hash);
 
 /** Goods-in submits the reference it read off the document that arrived. */
-export const confirmReceipt = (id: number) =>
-  send("plant", "confirmReceipt", [BigInt(id), deliveryRefFor(id)]).then((r) => r.hash);
+export const confirmReceipt = async (id: number) =>
+  send("plant", "confirmReceipt", [BigInt(id), await deliveryRefFor(id)]).then((r) => r.hash);
 
 /** Whether this deployment holds any supplier key at all. */
 export const actsForSuppliers = () =>
@@ -247,5 +262,5 @@ export async function markShipped(id: number) {
     hasA && po.supplier.toLowerCase() === addressOf("supplierA").toLowerCase()
       ? "supplierA"
       : "supplierB";
-  return send(role, "markShipped", [BigInt(id), deliveryRefFor(id)]).then((r) => r.hash);
+  return send(role, "markShipped", [BigInt(id), await deliveryRefFor(id)]).then((r) => r.hash);
 }

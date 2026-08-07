@@ -9,6 +9,8 @@ import {
   txUrl,
 } from "@/lib/chain.ts";
 import { denied } from "@/lib/guard.ts";
+import { cookieFrom, sessionOperator } from "@/lib/auth.ts";
+import { recordAction } from "@/lib/journal.ts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -85,11 +87,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: explain(e) }, { status: 502 });
   }
 
+  /* On chain every one of these is the plant key, so the chain cannot say
+     which person pressed it. That is what the journal is for. */
+  const operator = sessionOperator(cookieFrom(req)) ?? "unauthenticated";
+  const name = String(action);
+
   try {
     const hash = await run(n);
+    recordAction({ at: new Date().toISOString(), operator, action: name, poId: n, hash });
     return NextResponse.json({ hash, url: txUrl(hash) });
   } catch (e) {
+    const error = explain(e);
+    recordAction({ at: new Date().toISOString(), operator, action: name, poId: n, error });
     // The move was refused by the contract, not broken by us.
-    return NextResponse.json({ error: explain(e) }, { status: 409 });
+    return NextResponse.json({ error }, { status: 409 });
   }
 }

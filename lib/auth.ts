@@ -12,6 +12,7 @@
  * that is a schema and a login page, and it replaces this file rather than
  * extending it.
  */
+import fs from "node:fs";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 export const COOKIE = "foreman_session";
@@ -50,22 +51,39 @@ const secret = () => {
 
 const sign = (payload: string) => createHmac("sha256", secret()).update(payload).digest("hex");
 
-/** A token carrying only its own expiry — there is one operator to identify. */
-export function issueSession(nowMs = Date.now()): string {
-  const exp = String(nowMs + SESSION_HOURS * 3_600_000);
-  return `${exp}.${sign(exp)}`;
+/**
+ * The token carries who, as well as until when.
+ *
+ * A shared password means the audit trail says "the plant" approved a $4,000
+ * spindle, which is not an audit trail. The name is inside the signed payload
+ * so it cannot be edited without invalidating the signature.
+ */
+export function issueSession(operator = "operator", nowMs = Date.now()): string {
+  /* base64url, not encodeURIComponent: the token is three dot-separated
+     fields, and encodeURIComponent leaves a dot alone. An operator called
+     "siti a.r" — or anyone identified by an email address — produced a
+     four-field token that failed to parse, so the login succeeded and the
+     session did not. base64url has no dot in its alphabet. */
+  const payload = `${nowMs + SESSION_HOURS * 3_600_000}.${Buffer.from(operator).toString("base64url")}`;
+  return `${payload}.${sign(payload)}`;
 }
 
-export function validSession(token: string | undefined, nowMs = Date.now()): boolean {
-  if (!token) return false;
-  const [exp, mac] = token.split(".");
-  if (!exp || !mac) return false;
+/** The operator this token names, or null if it is not a valid token. */
+export function sessionOperator(token: string | undefined, nowMs = Date.now()): string | null {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [exp, name, mac] = parts;
 
-  const expected = Buffer.from(sign(exp), "hex");
+  const expected = Buffer.from(sign(`${exp}.${name}`), "hex");
   const actual = Buffer.from(mac, "hex");
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return false;
-  return Number(exp) > nowMs;
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+  if (!(Number(exp) > nowMs)) return null;
+  return Buffer.from(name, "base64url").toString("utf8");
 }
+
+export const validSession = (token: string | undefined, nowMs = Date.now()): boolean =>
+  sessionOperator(token, nowMs) !== null;
 
 /** Set-Cookie for a fresh session. Secure everywhere but a local dev server. */
 export function sessionCookie(token: string, secure = process.env.NODE_ENV === "production"): string {
@@ -92,5 +110,86 @@ export function cookieFrom(req: Request): string | undefined {
   return undefined;
 }
 
-/** Whether an operator password is configured at all. */
-export const passwordAuthEnabled = () => Boolean(process.env.OPERATOR_PASSWORD_HASH);
+export interface Operator {
+  name: string;
+  hash: string;
+}
+
+/**
+ * The people who may approve spending.
+ *
+ * OPERATORS_FILE is a JSON array of { name, hash }. A single
+ * OPERATOR_PASSWORD_HASH still works and reads as one operator called
+ * "operator", so an existing pilot keeps running without being edited.
+ */
+export function operators(): Operator[] {
+  const file = process.env.OPERATORS_FILE;
+  if (file) {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error(`${file} must be a non-empty array of { name, hash }`);
+    }
+    for (const o of parsed) {
+      if (!o?.name || typeof o.hash !== "string") {
+        throw new Error(`${file}: every operator needs a name and a hash`);
+      }
+    }
+    return parsed as Operator[];
+  }
+  const single = process.env.OPERATOR_PASSWORD_HASH;
+  return single ? [{ name: "operator", hash: single }] : [];
+}
+
+/** Whether any operator password is configured at all. */
+export const passwordAuthEnabled = () => operators().length > 0;
+
+/**
+ * Failed attempts, per operator name.
+ *
+ * scrypt already makes each guess cost ~100ms, which is most of what a
+ * single-operator login needs. This is the rest of it: after enough wrong
+ * guesses the name stops being tryable for a while, so an unattended panel on
+ * a plant network is not a password oracle with a slow clock.
+ *
+ * ponytail: in memory, so a restart clears it and a second instance counts
+ * separately. Both are acceptable when the alternative is a shared store for
+ * lockout state; neither is acceptable if you ever expose this to the open
+ * internet, where the answer is a rate limiter in front, not in here.
+ */
+const LOCK_AFTER = Number(process.env.LOGIN_LOCK_AFTER ?? 5);
+const LOCK_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES ?? 15);
+
+const failures = new Map<string, { count: number; until: number }>();
+
+export const resetLockouts = () => failures.clear();
+
+export function lockedUntil(name: string, nowMs = Date.now()): number | null {
+  const f = failures.get(name);
+  return f && f.until > nowMs ? f.until : null;
+}
+
+export function recordFailure(name: string, nowMs = Date.now()): void {
+  const f = failures.get(name) ?? { count: 0, until: 0 };
+  f.count += 1;
+  if (f.count >= LOCK_AFTER) {
+    f.until = nowMs + LOCK_MINUTES * 60_000;
+    f.count = 0;
+  }
+  failures.set(name, f);
+}
+
+export const clearFailures = (name: string) => failures.delete(name);
+
+/**
+ * Checks a name and password against the register.
+ *
+ * An unknown name is still charged a scrypt hash against a throwaway salt, so
+ * "no such operator" and "wrong password" take the same time and the login
+ * does not enumerate who works here.
+ */
+export function authenticate(name: string, password: string): Operator | null {
+  const found = operators().find((o) => o.name === name);
+  const stored = found?.hash ?? hashPassword("this password matches nothing");
+  const ok = verifyPassword(password, stored);
+  return ok && found ? found : null;
+}

@@ -13,6 +13,7 @@ import { test, expect, request as playwrightRequest } from "@playwright/test";
  *   PILOT_TELEMETRY_TOKEN=… PILOT_PASSWORD=… npx playwright test pilot
  */
 const BASE = process.env.PILOT_BASE_URL;
+const CRON = process.env.PILOT_CRON_TOKEN ?? "";
 const TOKEN = process.env.PILOT_TELEMETRY_TOKEN ?? "";
 const PASSWORD = process.env.PILOT_PASSWORD ?? "";
 const TAG = process.env.PILOT_TAG ?? "LATHE-01";
@@ -303,6 +304,140 @@ test.describe("wrong path — the money routes need a session", () => {
       data: { tag: TAG, readings: [{ at: Date.now(), rms: 4 }] },
     });
     expect(res.status(), "the two credentials are separate on purpose").toBe(401);
+    await ctx.dispose();
+  });
+});
+
+
+test.describe("wrong path — the schedule spends without a human watching", () => {
+  test("refuses a scheduled run with no token", async () => {
+    const ctx = await api();
+    const res = await ctx.post("/api/cron", { data: {} });
+    expect([401, 503]).toContain(res.status());
+    await ctx.dispose();
+  });
+
+  test("refuses a scheduled run with the wrong token", async () => {
+    const ctx = await api();
+    const res = await ctx.post("/api/cron", { headers: bearer("not-the-cron-token"), data: {} });
+    expect([401, 503]).toContain(res.status());
+    await ctx.dispose();
+  });
+
+  /* Three credentials, three jobs. A leaked one must not become the others. */
+  test("neither the operator session nor the ingest token starts a scheduled run", async () => {
+    test.skip(!PASSWORD, "needs PILOT_PASSWORD");
+    const ctx = await api();
+    await ctx.post("/api/login", { data: { password: PASSWORD } });
+    expect([401, 503]).toContain((await ctx.post("/api/cron", { data: {} })).status());
+    expect([401, 503]).toContain(
+      (await ctx.post("/api/cron", { headers: bearer(TOKEN), data: {} })).status(),
+    );
+    await ctx.dispose();
+  });
+
+  test("the cron token does not open the money routes or ingest", async () => {
+    test.skip(!CRON, "needs PILOT_CRON_TOKEN");
+    const ctx = await api();
+    expect((await ctx.post("/api/po", { headers: bearer(CRON), data: { action: "cancel", id: 0 } })).status()).toBe(401);
+    expect(
+      (await ctx.post("/api/telemetry", {
+        headers: bearer(CRON),
+        data: { tag: TAG, readings: [{ at: Date.now(), rms: 4 }] },
+      })).status(),
+    ).toBe(401);
+    await ctx.dispose();
+  });
+});
+
+test.describe("the journal keeps what the panel used to lose", () => {
+  test.skip(!PASSWORD, "set PILOT_PASSWORD to reach the journal");
+
+  test("is behind the same gate as the money routes", async () => {
+    const ctx = await api();
+    const res = await ctx.get("/api/runs");
+    expect(res.status(), "the trace names suppliers, prices and stock").toBe(401);
+    await ctx.dispose();
+  });
+
+  test("returns runs and operator actions once signed in", async () => {
+    const ctx = await api();
+    await ctx.post("/api/login", { data: { password: PASSWORD } });
+    const body = await (await ctx.get("/api/runs?limit=5")).json();
+
+    expect(Array.isArray(body.runs)).toBe(true);
+    expect(Array.isArray(body.actions)).toBe(true);
+    await ctx.dispose();
+  });
+
+  /* Every action on chain is the plant key, so the chain cannot say which
+     person pressed it. The journal is the only place that can. */
+  test("records who attempted an action, including one the contract refused", async () => {
+    const ctx = await api();
+    await ctx.post("/api/login", { data: { password: PASSWORD } });
+    await ctx.post("/api/po", { data: { action: "confirm", id: 0 } });
+
+    const body = await (await ctx.get("/api/runs?limit=50")).json();
+    const mine = body.actions.find((a: { poId: number }) => a.poId === 0);
+    expect(mine, "the attempt should be on record either way").toBeTruthy();
+    expect(mine.operator).toBe("operator");
+    await ctx.dispose();
+  });
+
+  test("clamps a silly limit rather than reading the whole file", async () => {
+    const ctx = await api();
+    await ctx.post("/api/login", { data: { password: PASSWORD } });
+    for (const limit of ["999999", "-1", "abc", ""]) {
+      const res = await ctx.get(`/api/runs?limit=${limit}`);
+      expect(res.status(), `limit=${limit}`).toBe(200);
+      expect((await res.json()).runs.length).toBeLessThanOrEqual(200);
+    }
+    await ctx.dispose();
+  });
+});
+
+test.describe("wrong path — guessing an operator password", () => {
+  test.skip(!PASSWORD, "set PILOT_PASSWORD to exercise the lockout");
+
+  /* scrypt makes each guess cost ~100ms, which is most of it. The lockout is
+     the rest: an unattended panel on a plant network is not a password oracle
+     with a slow clock. */
+  test("locks the account after enough wrong guesses, then says when to retry", async () => {
+    const ctx = await api();
+    let sawLockout = false;
+
+    for (let i = 0; i < 7; i++) {
+      const res = await ctx.post("/api/login", {
+        data: { operator: "lockme", password: `wrong-${i}` },
+      });
+      if (res.status() === 429) {
+        sawLockout = true;
+        expect((await res.json()).error).toMatch(/minutes/);
+        break;
+      }
+      expect(res.status()).toBe(401);
+    }
+
+    expect(sawLockout, "seven wrong guesses should have locked it").toBe(true);
+    await ctx.dispose();
+  });
+
+  test("locking one account does not lock the shift out of the panel", async () => {
+    const ctx = await api();
+    for (let i = 0; i < 7; i++) {
+      await ctx.post("/api/login", { data: { operator: "someone-else", password: `no-${i}` } });
+    }
+    const res = await ctx.post("/api/login", { data: { password: PASSWORD } });
+    expect(res.status(), "the real operator must still be able to sign in").toBe(200);
+    await ctx.dispose();
+  });
+
+  test("does not reveal whether the operator exists", async () => {
+    const ctx = await api();
+    const unknown = await ctx.post("/api/login", { data: { operator: "ghost", password: "x".repeat(20) } });
+    const known = await ctx.post("/api/login", { data: { operator: "operator", password: "x".repeat(20) } });
+
+    expect(await unknown.text()).toBe(await known.text());
     await ctx.dispose();
   });
 });

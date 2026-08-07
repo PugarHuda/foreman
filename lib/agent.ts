@@ -18,6 +18,7 @@ import {
 import { describePart, machineById, machines, quotesFor, stockOf } from "./erp.ts";
 import { isStale, seriesFor, stalenessHours } from "./telemetry.ts";
 import { proposePO, getState } from "./chain.ts";
+import { notify } from "./notify.ts";
 
 const VENICE_URL = "https://api.venice.ai/api/v1/chat/completions";
 
@@ -329,6 +330,19 @@ async function dispatch(
         detail: args.reason,
         txHash: po.hash,
       });
+
+      /* The largest gap in the loop was here: the agent decided a person was
+         needed and nothing told the person. Keyed per order so a re-run does
+         not page anyone twice about the same one. */
+      if (po.status !== "Funded") {
+        await notify({
+          kind: "approval",
+          key: `approval:${po.id}`,
+          title: `Order #${po.id} needs your approval — $${args.amount_usd}`,
+          detail: `${args.part_no} for machine ${args.machine_id}. ${args.reason}`,
+          url: po.hash ? `tx ${po.hash}` : undefined,
+        });
+      }
       return {
         po_id: po.id,
         status: po.status,

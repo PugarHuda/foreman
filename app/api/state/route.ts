@@ -4,6 +4,7 @@ import { getState, explorerBase } from "@/lib/chain.ts";
 import { avoidedDowntimeUsd, supplierRecords } from "@/lib/plant.ts";
 import { machines as assets, quotesFor } from "@/lib/erp.ts";
 import { telemetrySource, windowFor } from "@/lib/telemetry.ts";
+import { notify } from "@/lib/notify.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,20 @@ export async function GET(req: Request) {
   const machineId = known.some((m) => m.id === rawMachine) ? rawMachine : known[0].id;
 
   const machines = await snapshot(hours);
+
+  /* Detected is not the same as told. notify() has its own cooldown, so this
+     firing on every poll costs one message per machine per hour, not one per
+     request. */
+  for (const m of machines) {
+    if (m.stale) {
+      void notify({
+        kind: "stale",
+        key: `stale:${m.tag}`,
+        title: `${m.tag} has stopped reporting`,
+        detail: `No telemetry within the staleness window. A machine that stopped sending readings is not a machine that is well — nothing is watching this asset.`,
+      });
+    }
+  }
   const selected = machines.find((m) => m.id === machineId);
   const quotes = await quotesFor(selected?.criticalPart ?? "");
 

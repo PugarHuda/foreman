@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { runAgent, DEFAULT_ELAPSED_HOURS, type AgentStep } from "@/lib/agent.ts";
 import { denied } from "@/lib/guard.ts";
+import { cookieFrom, sessionOperator } from "@/lib/auth.ts";
+import { recordRun } from "@/lib/journal.ts";
+import { notify } from "@/lib/notify.ts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -25,6 +28,7 @@ export async function POST(req: Request) {
   if (no) return no;
 
   const { hours = DEFAULT_ELAPSED_HOURS } = await req.json().catch(() => ({}));
+  const operator = sessionOperator(cookieFrom(req)) ?? undefined;
 
   if (inFlight) {
     return NextResponse.json(
@@ -48,16 +52,48 @@ export async function POST(req: Request) {
         }
       };
 
+      const steps: AgentStep[] = [];
       const run = runAgent(Number(hours), {
-        onStep: (step: AgentStep) => send({ type: "step", step }),
+        onStep: (step: AgentStep) => {
+          steps.push(step);
+          send({ type: "step", step });
+        },
       });
       inFlight = run;
 
       try {
         const result = await run;
         send({ type: "done", summary: result.summary, hours: result.hours });
+
+        /* Kept, not just streamed. The order survives on chain; why it was
+           placed was being thrown away as it rendered, and that is the
+           question an auditor asks six months later. */
+        recordRun({
+          at: new Date().toISOString(),
+          hours: result.hours,
+          summary: result.summary,
+          steps: result.steps,
+          operator,
+          trigger: operator ? "operator" : "schedule",
+        });
       } catch (e) {
-        send({ type: "error", error: e instanceof Error ? e.message : String(e) });
+        const error = e instanceof Error ? e.message : String(e);
+        send({ type: "error", error });
+        recordRun({
+          at: new Date().toISOString(),
+          hours: Number(hours),
+          summary: "",
+          steps,
+          operator,
+          trigger: operator ? "operator" : "schedule",
+          error,
+        });
+        void notify({
+          kind: "failure",
+          key: "agent-failure",
+          title: "The maintenance agent could not finish its assessment",
+          detail: error,
+        });
       } finally {
         inFlight = null;
         controller.close();
