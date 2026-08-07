@@ -53,9 +53,15 @@ describe("documented test counts", () => {
     .map((f) => fs.readFileSync(`test/${f}`, "utf8"))
     .reduce((n, src) => n + (src.match(/^\s*it\(/gm) ?? []).length, 0);
 
-  const e2eTotal = (
-    fs.readFileSync("e2e/dashboard.spec.ts", "utf8").match(/^\s*test\(/gm) ?? []
-  ).length;
+  const specTotal = (file: string) =>
+    (fs.readFileSync(file, "utf8").match(/^\s*test\(/gm) ?? []).length;
+
+  const e2eTotal = specTotal("e2e/dashboard.spec.ts");
+
+  /* Counted apart from the browser suite because they only run against an
+     instance started in pilot configuration. Folding them into one number
+     would claim coverage that `npm run test:e2e` does not actually run. */
+  const pilotTotal = specTotal("e2e/pilot.spec.ts");
 
   const check = (doc: string) => {
     const text = fs.readFileSync(doc, "utf8");
@@ -64,6 +70,9 @@ describe("documented test counts", () => {
     }
     for (const [, claimed] of text.matchAll(/(\d+)\s+(?:browser|e2e)/g)) {
       assert.equal(Number(claimed), e2eTotal, `${doc} claims ${claimed} browser tests`);
+    }
+    for (const [, claimed] of text.matchAll(/(\d+)\s+pilot/g)) {
+      assert.equal(Number(claimed), pilotTotal, `${doc} claims ${claimed} pilot tests`);
     }
   };
 

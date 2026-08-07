@@ -201,8 +201,13 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 99 contract + unit tests, in-process EVM, no node needed
+npm test          # 107 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
+
+# The pilot surfaces — ingest, the asset register, an ERP, a real login —
+# need an instance started in pilot configuration, so they are skipped unless
+# you point them at one. 20 pilot tests, happy path and wrong path.
+PILOT_BASE_URL=http://localhost:3000 PILOT_TELEMETRY_TOKEN=… PILOT_PASSWORD=…   npx playwright test pilot
 ```
 
 The agent loop is tested too, with the model replaced by a script: that it
@@ -350,6 +355,38 @@ person can drive every role; in a pilot the supplier despatches from their own
 wallet, which the contract already requires — `markShipped` reverts for anyone
 but `po.supplier`. Without the keys the *Supplier ships* button says so
 instead of failing with a missing-env error.
+
+### 6. The agent key, once it is worth stealing
+
+`AGENT_SIGNER_URL` plus `AGENT_SIGNER_ADDRESS` moves signing to a service you
+run. It sends a 32-byte digest and expects a 65-byte signature back:
+
+```
+POST $AGENT_SIGNER_URL
+{ "role": "agent", "digest": "0x…" }   ->   { "signature": "0x…" }
+```
+
+No cloud vendor's SDK ends up in this repo — AWS KMS, GCP KMS, Vault,
+Fireblocks and an HSM in a rack all fit behind that. The service returns a
+complete signature including the recovery byte, because recovering it means
+trying both and checking which yields the expected address, and that is
+vendor-shaped work that belongs next to the vendor. `REMOTE_SIGNER_URL` sets
+one endpoint for every role.
+
+### Mainnet, and what refuses to start on it
+
+`CHAIN=base` is the only setting where a mistake costs money, so it checks
+itself before serving any route that moves funds (`lib/safety.ts`):
+
+**Refuses to serve** without `OPERATOR_PASSWORD_HASH` — the demo gate ships to
+the browser and is not acceptable against real money; without a signable
+`SESSION_SECRET`; or if the deployed token is not Circle's canonical USDC for
+the chain. That last one catches pointing a live contract at the mock ERC-20
+this repo deploys, which would settle every invoice in tokens nobody accepts.
+
+**Warns and continues** when the agent key is a plain environment variable, or
+when a supplier key is on the plant's server. A supervised pilot may
+reasonably accept both, and being unable to start is its own kind of failure.
 
 ### What a pilot still is not
 

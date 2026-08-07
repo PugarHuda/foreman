@@ -17,8 +17,22 @@
  * not default to open because someone forgot an env var.
  */
 import { cookieFrom, passwordAuthEnabled, validSession } from "./auth.ts";
+import { announceOnce, mainnetBlockers } from "./safety.ts";
 
 export function denied(req: Request): Response | null {
+  announceOnce();
+
+  /* On mainnet a misconfiguration is not a papercut, so it closes the door
+     rather than logging a line nobody reads. Checked before the local-dev
+     bypass: `CHAIN=base` on a laptop is still real money. */
+  const blockers = mainnetBlockers();
+  if (blockers.length > 0) {
+    return Response.json(
+      { error: "Refusing to move real funds until this is fixed.", blockers },
+      { status: 503 },
+    );
+  }
+
   // Localhost is the operator's own machine. Requiring a login there only
   // locks you out of your own demo.
   if (process.env.NODE_ENV !== "production") return null;

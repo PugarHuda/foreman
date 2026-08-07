@@ -17,8 +17,10 @@ import { waybillFor } from "./plant.ts";
 import { privateKeyToAccount } from "viem/accounts";
 import { FOREMAN_ADDRESS, FOREMAN_ABI, EXPLORER } from "./deployment.ts";
 import { activeChain, rpcUrl } from "./chains.ts";
+import { remoteAccount, usesRemoteSigner } from "./signer.ts";
 
-export type Role = "plant" | "agent" | "supplierA" | "supplierB";
+export type { Role } from "./signer.ts";
+import type { Role } from "./signer.ts";
 export type { Address };
 
 const KEY_ENV: Record<Role, string> = {
@@ -53,20 +55,24 @@ export const publicClient = createPublicClient({
   batch: { multicall: { wait: 16 } },
 });
 
-function walletFor(role: Role) {
+/** A KMS-backed signer if one is configured, otherwise the env-var key. */
+function accountFor(role: Role) {
+  if (usesRemoteSigner(role)) return remoteAccount(role);
   const pk = process.env[KEY_ENV[role]];
   if (!pk) throw new Error(`${KEY_ENV[role]} missing from .env`);
+  return privateKeyToAccount(pk as `0x${string}`);
+}
+
+function walletFor(role: Role) {
   return createWalletClient({
-    account: privateKeyToAccount(pk as `0x${string}`),
+    account: accountFor(role),
     chain: activeChain(),
     transport: http(rpcUrl()),
   });
 }
 
 export function addressOf(role: Role): Address {
-  const pk = process.env[KEY_ENV[role]];
-  if (!pk) throw new Error(`${KEY_ENV[role]} missing from .env`);
-  return privateKeyToAccount(pk as `0x${string}`).address;
+  return accountFor(role).address;
 }
 
 const foreman = { address: FOREMAN_ADDRESS as Address, abi: FOREMAN_ABI as unknown as Abi };
@@ -211,7 +217,12 @@ export const confirmReceipt = (id: number) =>
 
 /** Whether this deployment holds any supplier key at all. */
 export const actsForSuppliers = () =>
-  Boolean(process.env.SUPPLIER_A_KEY || process.env.SUPPLIER_B_KEY);
+  Boolean(
+    process.env.SUPPLIER_A_KEY ||
+      process.env.SUPPLIER_B_KEY ||
+      usesRemoteSigner("supplierA") ||
+      usesRemoteSigner("supplierB"),
+  );
 
 /**
  * Ship as whichever supplier actually owns the PO, committing to the waybill.
@@ -231,7 +242,7 @@ export async function markShipped(id: number) {
   const { pos } = await getState();
   const po = pos.find((p) => p.id === id);
   if (!po) throw new Error(`no PO ${id}`);
-  const hasA = Boolean(process.env.SUPPLIER_A_KEY);
+  const hasA = Boolean(process.env.SUPPLIER_A_KEY) || usesRemoteSigner("supplierA");
   const role: Role =
     hasA && po.supplier.toLowerCase() === addressOf("supplierA").toLowerCase()
       ? "supplierA"
