@@ -233,9 +233,12 @@ export function onOrderCount(
 export function stockOnHand(
   pos: readonly { partNo: string; status: string }[],
   partNo: string,
+  /* Passed in rather than read from the fixture, so the store of record can be
+     an ERP without this function knowing there is one. */
+  baseStock: number = getStock(partNo),
 ): number {
   const onShelf = pos.filter((p) => p.partNo === partNo && p.status === "Released").length;
-  return getStock(partNo) + onShelf;
+  return baseStock + onShelf;
 }
 
 /**

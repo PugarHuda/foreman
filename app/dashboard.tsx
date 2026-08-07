@@ -76,6 +76,9 @@ async function post(url: string, body: unknown, seconds: number) {
       method: "POST",
       headers: POST_HEADERS,
       body: JSON.stringify(body),
+      // The session cookie is HttpOnly, so it is the only thing that carries
+      // the operator's authority — nothing readable by a page script does.
+      credentials: "same-origin",
       signal: abort.signal,
     });
   } catch (e) {
@@ -101,6 +104,8 @@ interface Machine {
   zone: "A" | "B" | "C" | "D";
   rulHours: number | null;
   r2: number;
+  /** False when the machine is registered but has never sent a reading. */
+  reporting: boolean;
 }
 
 interface Sample {
@@ -140,6 +145,12 @@ interface Step {
 
 interface State {
   hours: number;
+  /** The window the data actually spans — a fixed replay, or however long a
+      real machine has been reporting. */
+  hoursMin: number;
+  hoursMax: number;
+  /** True when this instance is reading a plant rather than the replay. */
+  live: boolean;
   machineId: number;
   machines: Machine[];
   series: Sample[];
@@ -173,6 +184,8 @@ export default function Dashboard() {
   const [ranAtHour, setRanAtHour] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Set when the server says the session is gone, not when a password is wrong. */
+  const [needsLogin, setNeedsLogin] = useState(false);
   /** Kept apart from action errors so neither wipes the other off screen. */
   const [loadError, setLoadError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -230,7 +243,12 @@ export default function Dashboard() {
     try {
       const res = await post("/api/agent", { hours }, 150);
       if (!res.ok) {
-        throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+        const out = await res.json().catch(() => ({}));
+        if (res.status === 401 && out.login) {
+          setNeedsLogin(true);
+          throw new Error("Your session has expired. Sign in to continue.");
+        }
+        throw new Error(out.error ?? `HTTP ${res.status}`);
       }
 
       // Newline-delimited JSON: steps arrive as they happen, so the panel
@@ -273,12 +291,30 @@ export default function Dashboard() {
     try {
       const res = await post("/api/po", { action, id }, 90);
       const out = await res.json();
+      if (res.status === 401 && out.login) {
+        setNeedsLogin(true);
+        throw new Error("Your session has expired. Sign in to continue.");
+      }
       if (!res.ok) throw new Error(out.error);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function signIn(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    setError(null);
+    try {
+      const res = await post("/api/login", { password: form.get("password") }, 30);
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error);
+      setNeedsLogin(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -299,11 +335,11 @@ export default function Dashboard() {
           The machine asks for its own spare part. A human sets the limit, once.
         </span>
         <label className="eyebrow" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          run hour {hours}
+          {data?.live ? "hour" : "run hour"} {hours}
           <input
             type="range"
-            min={240}
-            max={340}
+            min={data ? Math.max(data.hoursMin, data.hoursMax - 100) : 240}
+            max={data ? data.hoursMax : 340}
             step={4}
             value={hours}
             onChange={(e) => setHours(Number(e.target.value))}
@@ -323,6 +359,13 @@ export default function Dashboard() {
         </p>
       )}
       {error && <p className="error">{error}</p>}
+      {needsLogin && (
+        <form className="signin" onSubmit={signIn}>
+          <label htmlFor="operator-password">Operator password</label>
+          <input id="operator-password" name="password" type="password" autoComplete="current-password" required />
+          <button className="btn primary" type="submit">Sign in</button>
+        </form>
+      )}
       {!data && !loadError && <p className="empty">Reading the line…</p>}
 
       {/* When the chain cannot be read, these must not read as zero — a row of

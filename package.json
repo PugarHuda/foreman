@@ -16,7 +16,9 @@
     "test:e2e": "playwright test",
     "keys": "node scripts/keys.mjs",
     "deploy": "node scripts/deploy.mjs",
-    "seed": "node --env-file=.env scripts/seed-demo.ts"
+    "seed": "node --env-file=.env scripts/seed-demo.ts",
+    "passwd": "node scripts/passwd.mjs",
+    "bridge": "node scripts/telemetry-bridge.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
@@ -31,6 +33,7 @@
   "dependencies": {
     "next": "^16.2.12",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "viem": "^2.55.10"
   }
 }

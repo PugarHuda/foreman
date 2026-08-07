@@ -360,6 +360,16 @@ test.describe("wrong path — bad input is refused, not crashed on", () => {
     expect((await res.json()).machineId).toBe(7);
   });
 
+  /* Number(null) is 0 and 0 is finite, so an absent hours parameter used to
+     clamp to the start of the window rather than the default. It never showed
+     because the panel always sends one. */
+  test("an absent run hour is the default, not the first hour on record", async ({ request }) => {
+    const res = await request.get("/api/state");
+    const body = await res.json();
+    expect(body.hours).toBeGreaterThan(body.hoursMin);
+    expect(body.series.length).toBeGreaterThan(10);
+  });
+
   test("a non-numeric run hour falls back to the default", async ({ request }) => {
     const res = await request.get("/api/state?hours=abc&machine=7");
     expect(res.status()).toBe(200);

@@ -1,5 +1,5 @@
 import { getState, explorerBase } from "@/lib/chain.ts";
-import { MACHINES, getQuotes } from "@/lib/plant.ts";
+import { machines as assets, quotesFor } from "@/lib/erp.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -51,9 +51,9 @@ export async function GET() {
   }
 
   const explorer = explorerBase();
-  const rows = state.pos.map((po) => {
-    const machine = MACHINES.find((m) => m.id === po.machineId);
-    const quote = getQuotes(po.partNo).find(
+  const rows = await Promise.all(state.pos.map(async (po) => {
+    const machine = assets().find((m) => m.id === po.machineId);
+    const quote = (await quotesFor(po.partNo)).find(
       (q) => q.address.toLowerCase() === po.supplier.toLowerCase(),
     );
     return [
@@ -69,7 +69,7 @@ export async function GET() {
       state.foreman,
       explorer ? `${explorer}/address/${state.foreman}` : "",
     ];
-  });
+  }));
 
   const csv = [COLUMNS.join(","), ...rows.map((r) => r.map(escapeCell).join(","))].join("\n");
   const day = new Date().toISOString().slice(0, 10);

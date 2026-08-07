@@ -209,11 +209,32 @@ export const fitPart = (id: number) => send("plant", "fitPart", [BigInt(id)]).th
 export const confirmReceipt = (id: number) =>
   send("plant", "confirmReceipt", [BigInt(id), deliveryRefFor(id)]).then((r) => r.hash);
 
-/** Ship as whichever supplier actually owns the PO, committing to the waybill. */
+/** Whether this deployment holds any supplier key at all. */
+export const actsForSuppliers = () =>
+  Boolean(process.env.SUPPLIER_A_KEY || process.env.SUPPLIER_B_KEY);
+
+/**
+ * Ship as whichever supplier actually owns the PO, committing to the waybill.
+ *
+ * Only possible because the demo holds every role's key on one box, which is
+ * what makes it a demo. In a pilot the supplier despatches from their own
+ * wallet against their own PO — the contract already requires it, since
+ * `markShipped` reverts for anyone but `po.supplier`. Without their key here,
+ * say so rather than failing with a missing-env error that reads like a bug.
+ */
 export async function markShipped(id: number) {
+  if (!actsForSuppliers()) {
+    throw new Error(
+      "No supplier key on this server. The supplier marks despatch from their own wallet — send them the order id and the waybill.",
+    );
+  }
   const { pos } = await getState();
   const po = pos.find((p) => p.id === id);
   if (!po) throw new Error(`no PO ${id}`);
-  const role: Role = po.supplier.toLowerCase() === addressOf("supplierA").toLowerCase() ? "supplierA" : "supplierB";
+  const hasA = Boolean(process.env.SUPPLIER_A_KEY);
+  const role: Role =
+    hasA && po.supplier.toLowerCase() === addressOf("supplierA").toLowerCase()
+      ? "supplierA"
+      : "supplierB";
   return send(role, "markShipped", [BigInt(id), deliveryRefFor(id)]).then((r) => r.hash);
 }

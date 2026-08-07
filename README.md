@@ -201,8 +201,8 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 74 contract + unit tests, in-process EVM, no node needed
-npm run test:e2e  # 31 browser tests, against localhost or a deployed instance
+npm test          # 99 contract + unit tests, in-process EVM, no node needed
+npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 ```
 
 The agent loop is tested too, with the model replaced by a script: that it
@@ -258,6 +258,105 @@ bearing health
   ✔ crosses into Zone D by the end of the run
 ```
 
+## Running a pilot
+
+The demo defaults are fixtures. Every one of them is a seam with an env var in
+front of it, so a pilot is configuration rather than a fork. Nothing below
+changes the contract.
+
+Run it **on-prem** — a box in the plant, `npm run build && npm start`. That is
+not a deployment preference: the file store needs a disk that survives a
+restart, and telemetry that never leaves the site is the same argument the
+model provider choice makes.
+
+### 1. The asset register
+
+```jsonc
+// machines.json
+[{ "id": 1, "tag": "CNC-07", "name": "Mazak VCN-530",
+   "criticalPart": "6205-2RS", "escalationPart": "SPN-880",
+   "downtimeCostPerHour": 890 }]
+```
+
+`MACHINES_FILE=machines.json`. The tag is what telemetry is posted against, so
+it has to match what the gateway calls the machine.
+
+### 2. Telemetry
+
+`TELEMETRY_SOURCE=file` switches the replay off. Readings arrive at
+`POST /api/telemetry`, authenticated with `TELEMETRY_TOKEN`:
+
+```
+Authorization: Bearer $TELEMETRY_TOKEN
+{ "tag": "CNC-07", "readings": [{ "at": "2026-08-07T09:00:00Z", "rms": 3.91 }] }
+```
+
+There is no MQTT client in the web app on purpose — the protocol is the
+bridge's problem, and this endpoint speaks the one thing every gateway can
+already send. `scripts/telemetry-bridge.mjs` runs on-prem and does the
+translating:
+
+```bash
+npm i mqtt          && npm run bridge -- --source mqtt      # MQTT_TOPICS maps topic -> tag
+npm i node-opcua    && npm run bridge -- --source opcua     # OPCUA_NODES maps nodeId -> tag
+npm run bridge -- --source csv --file export.csv --tag CNC-07   # a historian export, once
+```
+
+It batches on a timer and re-queues on failure, so a Foreman that is briefly
+down costs a retry rather than an hour of trend.
+
+What it reads is the RMS a condition-monitoring gateway has already computed,
+not a raw accelerometer stream. If your sensors emit raw waveform, the RMS
+integration belongs in the gateway, which is where every vendor already puts
+it.
+
+A machine that is registered but has never reported reads as *not reporting* —
+never as a healthy one. The agent is told it cannot assess it and takes no
+action.
+
+### 3. Stock and purchasing
+
+`PLANT_SOURCE=http` plus `PLANT_API_URL` points the agent at whatever sits in
+front of the ERP:
+
+```
+GET /stock/:partNo    -> { "onHand": 3 }
+GET /quotes/:partNo   -> [{ "supplier": "...", "address": "0x…",
+                            "priceUsd": 180, "leadTimeHours": 36 }]
+GET /parts/:partNo    -> { "description": "Deep groove ball bearing 25x52x15" }
+```
+
+Quotes are the list the agent chooses from **and** the price it is held to, so
+a row with no address or no price is dropped rather than defaulted. Responses
+are cached 30 seconds — one shift assessment reads stock and quotes several
+times, and an ERP is not built for that.
+
+The supplier addresses in `/quotes` still have to be vetted on chain with
+`setSupplier`. The ERP proposes; the contract decides who is payable.
+
+### 4. Login
+
+```bash
+npm run passwd 'a long operator password'
+```
+
+Paste the three lines into `.env`. `OPERATOR_PASSWORD_HASH` turns off the
+`DEMO_SECRET` gate. The panel shows a sign-in field when the session expires.
+
+### 5. Supplier keys
+
+Delete `SUPPLIER_A_KEY` and `SUPPLIER_B_KEY`. The demo holds them so one
+person can drive every role; in a pilot the supplier despatches from their own
+wallet, which the contract already requires — `markShipped` reverts for anyone
+but `po.supplier`. Without the keys the *Supplier ships* button says so
+instead of failing with a missing-env error.
+
+### What a pilot still is not
+
+Testnet USDC and an unaudited contract. Both are deliberate: get the plant
+data and the loop right where a mistake costs nothing, then decide whether
+real money is worth an audit.
+
 ## What is real and what is staged
 
 Stated plainly, because a demo that hides its seams is not worth piloting.
@@ -273,13 +372,15 @@ reverts. What is staged is only where the reference comes from — it is derived
 from the order id so the demo holds no hidden state. Point `waybillFor` at a
 carrier API or a goods-in scanner and the contract is unchanged.
 
-**Staged:** the vibration signal is a seeded replay, not a live accelerometer.
-Its shape (flat baseline, exponential growth after fault onset) and its
-severity bands are the real ones, and `lib/machine.ts` consumes a plain
-`{hours, rms}` series — point it at a plant historian and nothing downstream
-changes. Inventory and supplier quotes are a fixture standing in for a CMMS;
-the agent reaches them through the tool surface it would use against a real
-SAP PM instance. USDC is a mock ERC-20 on testnet.
+**Staged by default, switchable by configuration:** out of the box the
+vibration signal is a seeded replay, and inventory and supplier quotes are
+fixtures. Each is a seam with a real implementation behind it —
+`TELEMETRY_SOURCE=file` reads a plant's own readings, `PLANT_SOURCE=http`
+reads its ERP — and the default stays the fixture so the public demo keeps
+working offline. See **Running a pilot** below.
+
+**Still staged in every configuration:** USDC is a mock ERC-20 on testnet, and
+the contract has not had a third-party audit. Neither is a code change.
 
 ## Where the trust actually sits
 
@@ -300,17 +401,27 @@ Three answers, in descending order of how much they are worth:
 3. **The tool layer pre-checks the address** so a wrong guess comes back to
    the model as a correctable error rather than a raw revert.
 
-What is *not* solved: `/api/agent` and `/api/po` sign with real keys and have
-no user authentication. On localhost that is correct — the only caller is the
-operator. On a public deployment it is not, so those routes refuse to serve
-unless `DEMO_SECRET` is set (`lib/guard.ts`). That shared secret is a speed
-bump against drive-by traffic, not authentication: it ships to the browser and
-anyone loading the page can read it. Production needs real sessions and the
-agent key in a KMS. Saying so plainly beats pretending otherwise.
+`/api/agent` and `/api/po` sign with real keys, so who may call them matters.
+There are two gates and the deployment picks one:
+
+- **`OPERATOR_PASSWORD_HASH` set** — a real session. scrypt-hashed password
+  that never reaches the browser, an HMAC-signed HttpOnly cookie, a 12-hour
+  expiry. This is what a pilot runs. `npm run passwd 'your password'` prints
+  the lines to paste into `.env`.
+- **`DEMO_SECRET` set instead** — the original speed bump, kept because the
+  public demo is meant to be pressed by strangers and its blast radius is the
+  point. It is *not* authentication: the secret ships in the page bundle and
+  anyone who loads the page can read it.
+
+Neither set, in production, means closed. An endpoint that moves funds does
+not default to open because someone forgot an env var.
+
+Still not solved: the agent key is an environment variable, not a KMS. Real
+money on mainnet needs it in one, and needs an audit.
 
 ## Next
 
-- Replace the replay with an MQTT/OPC-UA bridge from a real accelerometer.
+- The agent key in a KMS/HSM rather than an environment variable.
 - Delivery confirmation from goods-receipt scanning instead of a button.
 - Parametric cover: if the machine reaches Zone D anyway, the same escrow pays
   out a downtime claim. The contract barely changes.

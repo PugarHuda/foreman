@@ -1,29 +1,39 @@
 import { NextResponse } from "next/server";
-import { snapshot, series, DEFAULT_ELAPSED_HOURS } from "@/lib/agent.ts";
+import { snapshot, series } from "@/lib/agent.ts";
 import { getState, explorerBase } from "@/lib/chain.ts";
-import { MACHINES, getQuotes, avoidedDowntimeUsd, supplierRecords } from "@/lib/plant.ts";
+import { avoidedDowntimeUsd, supplierRecords } from "@/lib/plant.ts";
+import { machines as assets, quotesFor } from "@/lib/erp.ts";
+import { telemetrySource, windowFor } from "@/lib/telemetry.ts";
 
 export const dynamic = "force-dynamic";
-
-/** Telemetry only exists over this window; anything outside it is a typo. */
-const MIN_HOURS = 1;
-const MAX_HOURS = 400;
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
 
-  // A bad query string must never take the dashboard down — fall back to
-  // something sane and keep serving.
-  const rawHours = Number(url.searchParams.get("hours"));
-  const hours = Number.isFinite(rawHours)
-    ? Math.min(Math.max(rawHours, MIN_HOURS), MAX_HOURS)
-    : DEFAULT_ELAPSED_HOURS;
+  /* The replay is a fixed 400-hour run; live telemetry is however long the
+     machine has been reporting. Reading the window off the data is what stops
+     a three-day-old pilot offering a slider that runs into next month. */
+  const span = windowFor(assets());
+
+  /* A bad query string must never take the dashboard down — fall back to
+     something sane and keep serving.
+
+     Read as a string first: Number(null) is 0, and 0 is finite, so an absent
+     `hours` used to clamp to the start of the window instead of the default.
+     It never showed, because the panel always sends one. */
+  const rawHours = url.searchParams.get("hours");
+  const asked = rawHours === null ? NaN : Number(rawHours);
+  const hours = Number.isFinite(asked)
+    ? Math.min(Math.max(asked, span.min), span.max)
+    : span.latest;
 
   const rawMachine = Number(url.searchParams.get("machine"));
-  const machineId = MACHINES.some((m) => m.id === rawMachine) ? rawMachine : MACHINES[0].id;
+  const known = assets();
+  const machineId = known.some((m) => m.id === rawMachine) ? rawMachine : known[0].id;
 
-  const machines = snapshot(hours);
+  const machines = await snapshot(hours);
   const selected = machines.find((m) => m.id === machineId);
+  const quotes = await quotesFor(selected?.criticalPart ?? "");
 
   // The plant view works even before the contracts are deployed, so a missing
   // deployment shows up as one clear banner rather than an empty page.
@@ -37,13 +47,16 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     hours,
+    hoursMin: span.min,
+    hoursMax: span.max,
+    live: telemetrySource() === "file",
     machineId,
     machines,
     series: series(machineId, hours),
-    quotes: getQuotes(selected?.criticalPart ?? ""),
+    quotes,
     // Reliability is derived from the order book, not stored anywhere.
-    supplierRecords: supplierRecords(chain?.pos ?? [], getQuotes(selected?.criticalPart ?? "")),
-    avoidedUsd: avoidedUsd(chain?.pos ?? [], machines),
+    supplierRecords: supplierRecords(chain?.pos ?? [], quotes),
+    avoidedUsd: await avoidedUsd(chain?.pos ?? [], machines),
     explorer: explorerBase(),
     chain,
     chainError,
@@ -56,7 +69,7 @@ export async function GET(req: Request) {
  * avoidedDowntimeUsd, which counts at most one shift of exposure rather than
  * the whole projected outage.
  */
-function avoidedUsd(
+async function avoidedUsd(
   pos: {
     status: string;
     machineId: number;
@@ -65,7 +78,7 @@ function avoidedUsd(
     rulHoursAtOrder: number;
   }[],
   machines: { id: number; rulHours: number | null }[],
-): number {
+): Promise<number> {
   /* Money committed to a part that has not reached the store yet. Released and
      Fitted are deliberately out: those savings are banked, and counting one
      but not the other made the strip drop at goods-in for a delivered order
@@ -80,8 +93,8 @@ function avoidedUsd(
   for (const po of pos) {
     if (!inFlight.has(po.status)) continue;
 
-    const machine = MACHINES.find((m) => m.id === po.machineId);
-    const quote = getQuotes(po.partNo).find(
+    const machine = assets().find((m) => m.id === po.machineId);
+    const quote = (await quotesFor(po.partNo)).find(
       (q) => q.address.toLowerCase() === po.supplier.toLowerCase(),
     );
     // The projection recorded on chain when the order was placed, not today's

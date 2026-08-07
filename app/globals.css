@@ -440,6 +440,40 @@ a {
   white-space: pre-wrap;
 }
 
+/* Shown only when the server says the session is gone, so it sits inline with
+   the other things that interrupt an operator rather than as a whole page. */
+.signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: var(--gap) 0;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.signin label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.signin input {
+  font: inherit;
+  background: var(--void);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink);
+  padding: 6px 9px;
+  min-width: 200px;
+}
+
+.signin input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
 /* --- landing --- */
 
 /* The landing borrows the control room's furniture — same shell, strip, panel

@@ -7,19 +7,16 @@
  * on-chain cap no matter what it decides, and anything above the
  * auto-approve line lands in a human queue instead of executing.
  */
-import { simulateBearing, estimateRUL } from "./machine.ts";
+import { estimateRUL } from "./machine.ts";
 import {
-  MACHINES,
-  PARTS,
   PLANNING_HORIZON_HOURS,
-  getMachine,
-  getQuotes,
-  getStock,
   onOrderCount,
   stockOnHand,
   supplierRecords,
   type SupplierRecord,
 } from "./plant.ts";
+import { describePart, machineById, machines, quotesFor, stockOf } from "./erp.ts";
+import { seriesFor } from "./telemetry.ts";
 import { proposePO, getState } from "./chain.ts";
 
 const VENICE_URL = "https://api.venice.ai/api/v1/chat/completions";
@@ -107,34 +104,42 @@ const TOOLS = [
 ] as const;
 
 function healthOf(machineId: number, elapsedHours: number) {
-  const m = getMachine(machineId);
-  const run = simulateBearing({ seed: m.seed, onsetHours: m.onsetHours }).filter(
-    (s) => s.hours <= elapsedHours,
-  );
-  return { machine: m, health: estimateRUL(run) };
+  const m = machineById(machineId);
+  const run = seriesFor(m).filter((s) => s.hours <= elapsedHours);
+  /* A machine that has never reported has no health to estimate. Saying so is
+     the only safe answer: a default would read as a healthy machine, and the
+     agent would take no action on an asset nobody is actually watching. */
+  if (run.length === 0) {
+    return {
+      machine: m,
+      health: { currentRms: 0, zone: "A" as const, rulHours: null, growthPerHour: 0, r2: 0 },
+      reporting: false,
+    };
+  }
+  return { machine: m, health: estimateRUL(run), reporting: true };
 }
 
-export function snapshot(elapsedHours = DEFAULT_ELAPSED_HOURS) {
-  return MACHINES.map((m) => {
-    const { health } = healthOf(m.id, elapsedHours);
-    return {
-      id: m.id,
-      tag: m.tag,
-      name: m.name,
-      criticalPart: m.criticalPart,
-      downtimeCostPerHour: m.downtimeCostPerHour,
-      stock: getStock(m.criticalPart),
-      ...health,
-    };
-  });
+export async function snapshot(elapsedHours = DEFAULT_ELAPSED_HOURS) {
+  return Promise.all(
+    machines().map(async (m) => {
+      const { health, reporting } = healthOf(m.id, elapsedHours);
+      return {
+        id: m.id,
+        tag: m.tag,
+        name: m.name,
+        criticalPart: m.criticalPart,
+        downtimeCostPerHour: m.downtimeCostPerHour,
+        stock: await stockOf(m.criticalPart),
+        reporting,
+        ...health,
+      };
+    }),
+  );
 }
 
 /** Telemetry series for the dashboard chart. */
 export function series(machineId: number, elapsedHours = DEFAULT_ELAPSED_HOURS) {
-  const m = getMachine(machineId);
-  return simulateBearing({ seed: m.seed, onsetHours: m.onsetHours }).filter(
-    (s) => s.hours <= elapsedHours,
-  );
+  return seriesFor(machineById(machineId)).filter((s) => s.hours <= elapsedHours);
 }
 
 async function dispatch(
@@ -146,14 +151,23 @@ async function dispatch(
 ) {
   switch (name) {
     case "get_machine_health": {
-      const { machine, health } = healthOf(args.machine_id, elapsedHours);
+      const { machine, health, reporting } = healthOf(args.machine_id, elapsedHours);
       record({
         kind: "tool",
         label: `get_machine_health(${machine.tag})`,
-        detail: `${health.currentRms.toFixed(2)} mm/s RMS, ISO zone ${health.zone}, RUL ${
-          health.rulHours ?? "n/a"
-        } h (fit r²=${health.r2.toFixed(2)})`,
+        detail: reporting
+          ? `${health.currentRms.toFixed(2)} mm/s RMS, ISO zone ${health.zone}, RUL ${
+              health.rulHours ?? "n/a"
+            } h (fit r²=${health.r2.toFixed(2)})`
+          : "no telemetry on record — this machine is not reporting",
       });
+      if (!reporting) {
+        return {
+          machine: machine.tag,
+          error: "no telemetry on record for this machine",
+          note: "You cannot assess an asset that is not reporting. Say so and take no action on it.",
+        };
+      }
       return {
         machine: machine.tag,
         critical_part: machine.criticalPart,
@@ -170,12 +184,13 @@ async function dispatch(
       /* Stock on the shelf is only half the question. An MRP that ignores
          what is already on order re-buys the same part every time it runs —
          which is exactly what this agent did until it could see this. */
-      let onHand = getStock(args.part_no);
+      const baseStock = await stockOf(args.part_no);
+      let onHand = baseStock;
       let onOrder = 0;
       let orderBookRead = true;
       try {
         const { pos } = await deps.readOrders();
-        onHand = stockOnHand(pos, args.part_no);
+        onHand = stockOnHand(pos, args.part_no, baseStock);
         onOrder = onOrderCount(pos, args.part_no);
       } catch {
         orderBookRead = false;
@@ -184,9 +199,9 @@ async function dispatch(
       record({
         kind: "tool",
         label: `check_inventory(${args.part_no})`,
-        detail: `${onHand} on hand, ${orderBookRead ? onOrder : "?"} already on order — ${
-          PARTS[args.part_no] ?? "unknown part"
-        }`,
+        detail: `${onHand} on hand, ${orderBookRead ? onOrder : "?"} already on order — ${await describePart(
+          args.part_no,
+        )}`,
       });
 
       return {
@@ -200,7 +215,7 @@ async function dispatch(
       };
     }
     case "get_supplier_quotes": {
-      const quotes = getQuotes(args.part_no);
+      const quotes = await quotesFor(args.part_no);
 
       // Price and lead time are what a supplier promises. Delivery history is
       // what they have actually done, and it is already on chain.
@@ -244,7 +259,7 @@ async function dispatch(
       return { part_no: args.part_no, quotes: withHistory };
     }
     case "create_purchase_order": {
-      const offered = getQuotes(args.part_no);
+      const offered = await quotesFor(args.part_no);
       const payable = offered.map((q) => ({ supplier: q.supplier, address: q.address, price_usd: q.priceUsd }));
 
       // The contract rejects an unvetted payee anyway. Catching it here just
@@ -440,7 +455,7 @@ export async function runAgent(
     { role: "system", content: SYSTEM },
     {
       role: "user",
-      content: `Shift handover. Machines on this line: ${MACHINES.map((m) => `${m.tag} (id ${m.id})`).join(
+      content: `Shift handover. Machines on this line: ${machines().map((m) => `${m.tag} (id ${m.id})`).join(
         ", ",
       )}. Telemetry is current as of run-hour ${elapsedHours}. Assess and act.`,
     },
