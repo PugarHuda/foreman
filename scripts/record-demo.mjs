@@ -4,8 +4,14 @@
  *   npm run dev            # terminal 1
  *   node scripts/record-demo.mjs
  *
- * Writes docs/demo.webm. Pacing is deliberately slow — this is meant to be
- * watched, and to have a voiceover laid over it.
+ * Writes docs/demo.webm and the README still, docs/dashboard.png. Pacing is
+ * deliberately slow — this is meant to be watched, and to have a voiceover
+ * laid over it.
+ *
+ * STILL_ONLY=1 stops after the routine lane and writes only the still. The
+ * hero image goes stale on its own — a UI change dates it while the recording
+ * is still accurate — and refreshing it should not cost four minutes of
+ * testnet run and another 4 MB video in git history.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -15,6 +21,8 @@ import { chromium } from "@playwright/test";
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const OUT = "docs";
 const VIEWPORT = { width: 1600, height: 1100 };
+
+const STILL_ONLY = !!process.env.STILL_ONLY;
 
 const beat = (s) => new Promise((r) => setTimeout(r, s * 1000));
 
@@ -59,7 +67,7 @@ await resetBoard();
 const browser = await chromium.launch();
 const context = await browser.newContext({
   viewport: VIEWPORT,
-  recordVideo: { dir: OUT, size: VIEWPORT },
+  ...(STILL_ONLY ? {} : { recordVideo: { dir: OUT, size: VIEWPORT } }),
   deviceScaleFactor: 1,
 });
 const page = await context.newPage();
@@ -67,6 +75,9 @@ const page = await context.newPage();
 try {
   say("opening the control room");
   await page.goto(BASE, { waitUntil: "networkidle" });
+  // The dev-server badge is Next's, not the plant's. It has no business in a
+  // recording or in the README hero.
+  await page.addStyleTag({ content: "nextjs-portal { display: none }" });
   await page.locator(".machine").first().waitFor();
   await beat(4); // let the treasury strip and machine cards land
 
@@ -88,6 +99,21 @@ try {
   await page.getByRole("button", { name: "Run agent" }).click();
   await page.getByText("funded autonomously").first().waitFor({ timeout: 180_000 });
   await beat(5); // the reasoning trace is the point — leave it up
+
+  // Shot here, not on a fresh load: the still is the one thing a judge sees
+  // before deciding whether to watch anything, and a control room with an
+  // empty agent panel argues the opposite of the caption under it.
+  say("capturing the README still");
+  await page.mouse.wheel(0, -2000);
+  await beat(2);
+  await page.screenshot({ path: path.join(OUT, "dashboard.png"), fullPage: true });
+
+  if (STILL_ONLY) {
+    say("STILL_ONLY — stopping before the human lane");
+    await context.close();
+    await browser.close();
+    process.exit(0);
+  }
 
   say("advancing the run hour into Zone C");
   await page.locator('input[type="range"]').fill("320");

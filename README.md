@@ -180,7 +180,10 @@ goes from 0 to 180.
 
 To record that run rather than perform it: `node scripts/record-demo.mjs`
 drives the whole sequence against a running dev server and writes
-`docs/demo.webm`.
+`docs/demo.webm`, plus the still at the top of this file. `STILL_ONLY=1` stops
+after the routine lane and refreshes only the still — a UI change dates the
+image while the recording is still accurate, and that should not cost another
+video in git history.
 
 ### Settling in real USDC
 

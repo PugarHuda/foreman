@@ -8,6 +8,7 @@ types/
 .next/
 out/
 *.log
+*.tsbuildinfo
 
 # test + tooling output
 test-results/
