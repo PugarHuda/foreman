@@ -16,7 +16,7 @@ import {
   type SupplierRecord,
 } from "./plant.ts";
 import { describePart, machineById, machines, quotesFor, stockOf } from "./erp.ts";
-import { seriesFor } from "./telemetry.ts";
+import { isStale, seriesFor, stalenessHours } from "./telemetry.ts";
 import { proposePO, getState } from "./chain.ts";
 
 const VENICE_URL = "https://api.venice.ai/api/v1/chat/completions";
@@ -105,24 +105,30 @@ const TOOLS = [
 
 function healthOf(machineId: number, elapsedHours: number) {
   const m = machineById(machineId);
-  const run = seriesFor(m).filter((s) => s.hours <= elapsedHours);
-  /* A machine that has never reported has no health to estimate. Saying so is
-     the only safe answer: a default would read as a healthy machine, and the
-     agent would take no action on an asset nobody is actually watching. */
-  if (run.length === 0) {
+  const all = seriesFor(m);
+  const run = all.filter((s) => s.hours <= elapsedHours);
+
+  /* A machine that has never reported has no health to estimate, and one that
+     stopped reporting has none either — a dead gateway leaves a flat tail on
+     a healthy number, which is precisely what a machine in good condition
+     looks like. Both have to say so rather than default, or silence reads as
+     health and nobody is watching the asset at all. */
+  const stale = isStale(all, m.tag);
+  if (run.length === 0 || stale) {
     return {
       machine: m,
-      health: { currentRms: 0, zone: "A" as const, rulHours: null, growthPerHour: 0, r2: 0 },
+      health: { currentRms: run.at(-1)?.rms ?? 0, zone: "A" as const, rulHours: null, growthPerHour: 0, r2: 0 },
       reporting: false,
+      stale,
     };
   }
-  return { machine: m, health: estimateRUL(run), reporting: true };
+  return { machine: m, health: estimateRUL(run), reporting: true, stale: false };
 }
 
 export async function snapshot(elapsedHours = DEFAULT_ELAPSED_HOURS) {
   return Promise.all(
     machines().map(async (m) => {
-      const { health, reporting } = healthOf(m.id, elapsedHours);
+      const { health, reporting, stale } = healthOf(m.id, elapsedHours);
       return {
         id: m.id,
         tag: m.tag,
@@ -131,6 +137,7 @@ export async function snapshot(elapsedHours = DEFAULT_ELAPSED_HOURS) {
         downtimeCostPerHour: m.downtimeCostPerHour,
         stock: await stockOf(m.criticalPart),
         reporting,
+        stale,
         ...health,
       };
     }),
@@ -151,7 +158,7 @@ async function dispatch(
 ) {
   switch (name) {
     case "get_machine_health": {
-      const { machine, health, reporting } = healthOf(args.machine_id, elapsedHours);
+      const { machine, health, reporting, stale } = healthOf(args.machine_id, elapsedHours);
       record({
         kind: "tool",
         label: `get_machine_health(${machine.tag})`,
@@ -159,13 +166,17 @@ async function dispatch(
           ? `${health.currentRms.toFixed(2)} mm/s RMS, ISO zone ${health.zone}, RUL ${
               health.rulHours ?? "n/a"
             } h (fit r²=${health.r2.toFixed(2)})`
-          : "no telemetry on record — this machine is not reporting",
+          : stale
+            ? `telemetry stopped more than ${stalenessHours()} h ago — the last reading is not current`
+            : "no telemetry on record — this machine is not reporting",
       });
       if (!reporting) {
         return {
           machine: machine.tag,
-          error: "no telemetry on record for this machine",
-          note: "You cannot assess an asset that is not reporting. Say so and take no action on it.",
+          error: stale
+            ? "telemetry for this machine has gone stale"
+            : "no telemetry on record for this machine",
+          note: "You cannot assess an asset that is not reporting. Say so, and take no action on it — a machine that stopped sending readings is not a machine that is well.",
         };
       }
       return {

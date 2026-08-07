@@ -55,8 +55,9 @@ export async function POST(req: Request) {
   const checked = validateReadings(readings);
   if ("error" in checked) return Response.json({ error: checked.error }, { status: 400 });
 
+  let stored: number;
   try {
-    appendReadings(known.tag, checked.ok);
+    stored = appendReadings(known.tag, checked.ok);
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : String(e) },
@@ -64,5 +65,14 @@ export async function POST(req: Request) {
     );
   }
 
-  return Response.json({ ok: true, tag: known.tag, accepted: checked.ok.length });
+  /* `accepted` is what passed validation, `stored` is what was new. A bridge
+     replaying a batch it was not sure landed should see 0 stored and not
+     conclude anything is broken. */
+  return Response.json({
+    ok: true,
+    tag: known.tag,
+    accepted: checked.ok.length,
+    stored,
+    duplicates: checked.ok.length - stored,
+  });
 }

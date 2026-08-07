@@ -106,6 +106,8 @@ interface Machine {
   r2: number;
   /** False when the machine is registered but has never sent a reading. */
   reporting: boolean;
+  /** True when it did report once but has since gone quiet. */
+  stale: boolean;
 }
 
 interface Sample {

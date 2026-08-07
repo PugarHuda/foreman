@@ -97,12 +97,58 @@ export function validateReadings(input: unknown): { ok: Reading[] } | { error: s
  * appending to a file whose meaning shifts with its first row is how a
  * historian backfill silently rewrites every reading after it.
  */
-export function appendReadings(tag: string, readings: Reading[]): void {
+export function appendReadings(tag: string, readings: Reading[]): number {
   const file = fileFor(tag);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const header = fs.existsSync(file) ? "" : "at,rms\n";
-  const rows = readings.map((r) => `${r.at},${r.rms}\n`).join("");
+  const exists = fs.existsSync(file);
+
+  /* Anything at or before the newest reading on file is dropped.
+     scripts/telemetry-bridge.mjs re-queues a batch whose response it never
+     saw, so a POST that succeeded on the way out and failed on the way back
+     arrives twice — and a duplicated hour bends the log-linear fit towards
+     whatever happened during it. Idempotent on the receiving side is cheaper
+     than exactly-once on the sending side. */
+  const newest = exists ? lastTimestamp(file) : -Infinity;
+  const fresh = readings.filter((r) => Number(r.at) > newest);
+  if (fresh.length === 0) return 0;
+
+  const header = exists ? "" : "at,rms\n";
+  const rows = fresh.map((r) => `${r.at},${r.rms}\n`).join("");
   fs.appendFileSync(file, header + rows);
+  return fresh.length;
+}
+
+/** The newest timestamp on file, or -Infinity if there is nothing to compare. */
+function lastTimestamp(file: string): number {
+  const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const cell = lines[i].split(",")[0]?.trim();
+    if (!cell || cell === "at") continue;
+    const t = Number.isFinite(Number(cell)) ? Number(cell) : Date.parse(cell);
+    if (Number.isFinite(t)) return t;
+  }
+  return -Infinity;
+}
+
+/**
+ * How long a machine may go quiet before its readings stop counting as
+ * current.
+ *
+ * A gateway that dies mid-shift leaves a series that ends on a healthy
+ * number, and a flat tail is exactly what a machine in good condition looks
+ * like — so silence would read as health, which is the same failure as a
+ * sensor publishing nulls and worse, because nothing looks wrong.
+ */
+export const stalenessHours = () => Number(process.env.TELEMETRY_STALE_HOURS ?? 6);
+
+/** Whether this machine's newest reading is recent enough to act on. */
+export function isStale(samples: Sample[], tag: string, nowMs = Date.now()): boolean {
+  if (telemetrySource() === "sim" || samples.length === 0) return false;
+  const file = fileFor(tag);
+  if (!fs.existsSync(file)) return false;
+  const newest = lastTimestamp(file);
+  if (!Number.isFinite(newest)) return false;
+  return nowMs - newest > stalenessHours() * 3_600_000;
 }
 
 /**

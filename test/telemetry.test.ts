@@ -1,6 +1,9 @@
-import { describe, it } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { parseSeries, validateReadings } from "../lib/telemetry.ts";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { appendReadings, isStale, parseSeries, seriesFor, validateReadings } from "../lib/telemetry.ts";
 
 describe("reading a historian export", () => {
   it("turns timestamps into hours from the first sample", () => {
@@ -101,5 +104,83 @@ describe("accepting readings from a gateway", () => {
     assert.ok("error" in ok([]));
     assert.ok("error" in ok("not an array"));
     assert.ok("error" in ok(Array.from({ length: 10_001 }, () => ({ at: 0, rms: 1 }))));
+  });
+});
+
+describe("readings that arrive twice", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "foreman-telemetry-"));
+  const prior = { src: process.env.TELEMETRY_SOURCE, dir: process.env.TELEMETRY_DIR };
+
+  before(() => {
+    process.env.TELEMETRY_SOURCE = "file";
+    process.env.TELEMETRY_DIR = dir;
+  });
+  after(() => {
+    process.env.TELEMETRY_SOURCE = prior.src ?? "";
+    process.env.TELEMETRY_DIR = prior.dir ?? "";
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  /* The bridge re-queues a batch whose response it never saw, so a POST that
+     succeeded on the way out and failed on the way back arrives twice. A
+     duplicated hour bends the log-linear fit towards whatever happened in it. */
+  it("stores a batch once, however many times it is sent", () => {
+    const batch = [
+      { at: 1_000_000_000, rms: 1.6 },
+      { at: 1_000_003_600, rms: 1.7 },
+    ];
+    assert.equal(appendReadings("DUP-01", batch), 2);
+    assert.equal(appendReadings("DUP-01", batch), 0, "the replay must store nothing");
+    assert.equal(seriesFor({ tag: "DUP-01", seed: 1, onsetHours: 0 }).length, 2);
+  });
+
+  it("still takes the genuinely newer readings in a partly-replayed batch", () => {
+    appendReadings("DUP-02", [{ at: 2_000_000_000, rms: 1.6 }]);
+    const stored = appendReadings("DUP-02", [
+      { at: 2_000_000_000, rms: 1.6 },
+      { at: 2_000_003_600, rms: 1.8 },
+    ]);
+    assert.equal(stored, 1);
+  });
+});
+
+describe("a gateway that stops sending", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "foreman-stale-"));
+  const prior = { src: process.env.TELEMETRY_SOURCE, dir: process.env.TELEMETRY_DIR };
+
+  before(() => {
+    process.env.TELEMETRY_SOURCE = "file";
+    process.env.TELEMETRY_DIR = dir;
+  });
+  after(() => {
+    process.env.TELEMETRY_SOURCE = prior.src ?? "";
+    process.env.TELEMETRY_DIR = prior.dir ?? "";
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  /* A dead gateway leaves a flat tail on a healthy number, which is exactly
+     what a machine in good condition looks like. Silence must not read as
+     health — that is the same failure as a sensor publishing nulls, and worse,
+     because nothing on the panel looks wrong. */
+  it("goes stale once its last reading is older than the window", () => {
+    const now = Date.now();
+    appendReadings("STALE-01", [{ at: now - 30 * 3_600_000, rms: 4.2 }]);
+    const samples = seriesFor({ tag: "STALE-01", seed: 1, onsetHours: 0 });
+
+    assert.equal(isStale(samples, "STALE-01", now), true, "30 h of silence is stale");
+  });
+
+  it("is not stale while it is still reporting", () => {
+    const now = Date.now();
+    appendReadings("STALE-02", [{ at: now - 60_000, rms: 4.2 }]);
+    const samples = seriesFor({ tag: "STALE-02", seed: 1, onsetHours: 0 });
+
+    assert.equal(isStale(samples, "STALE-02", now), false);
+  });
+
+  it("never calls the replay stale, because it has no clock to be late against", () => {
+    process.env.TELEMETRY_SOURCE = "sim";
+    assert.equal(isStale([{ hours: 0, rms: 1.6 }], "CNC-07", Date.now()), false);
+    process.env.TELEMETRY_SOURCE = "file";
   });
 });

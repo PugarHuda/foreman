@@ -201,12 +201,12 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 107 contract + unit tests, in-process EVM, no node needed
+npm test          # 112 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 
 # The pilot surfaces — ingest, the asset register, an ERP, a real login —
 # need an instance started in pilot configuration, so they are skipped unless
-# you point them at one. 20 pilot tests, happy path and wrong path.
+# you point them at one. 22 pilot tests, happy path and wrong path.
 PILOT_BASE_URL=http://localhost:3000 PILOT_TELEMETRY_TOKEN=… PILOT_PASSWORD=…   npx playwright test pilot
 ```
 

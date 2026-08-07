@@ -73,6 +73,24 @@ test.describe("happy path — a plant's own machine and its own readings", () =>
     await expect(page.getByText(TAG, { exact: true })).toBeVisible();
     await expect(page.locator(".machine .rms").first()).toHaveText(/^\d+\.\d{2}$/);
   });
+
+  /* A dead gateway leaves a flat tail on a healthy number, which is what a
+     machine in good condition looks like. Whether this machine is currently
+     stale depends on how the instance was seeded, so assert the invariant
+     that has to hold either way rather than one particular state. */
+  test("never reports a projected life for a machine that is not reporting", async () => {
+    const ctx = await api();
+    const body = await (await ctx.get("/api/state")).json();
+
+    for (const m of body.machines) {
+      if (!m.reporting) {
+        expect(m.rulHours, `${m.tag} is not reporting but claims a life`).toBeNull();
+        expect(m.r2, `${m.tag} is not reporting but claims a fit`).toBe(0);
+      }
+      if (m.stale) expect(m.reporting, `${m.tag} is stale but reads as reporting`).toBe(false);
+    }
+    await ctx.dispose();
+  });
 });
 
 test.describe("wrong path — ingest refuses what it should", () => {
@@ -166,6 +184,36 @@ test.describe("wrong path — ingest refuses what it should", () => {
       data: { tag: TAG, readings: Array.from({ length: 10_001 }, () => ({ at: Date.now(), rms: 4 })) },
     });
     expect(res.status()).toBe(400);
+    await ctx.dispose();
+  });
+
+  /* The bridge re-queues a batch whose response it never saw, so a POST that
+     landed but whose reply was lost arrives twice. A duplicated hour bends
+     the fit towards whatever happened during it. */
+  test("stores a replayed batch once and says how many were duplicates", async () => {
+    const ctx = await api();
+    /* Two days ahead of anything the other tests in this file write. Ingest
+       drops whatever is not newer than the last reading on file, so a batch
+       that overlaps an earlier test's would be rejected for the right reason
+       and fail this one for the wrong one. */
+    const base = Date.now() + 2 * 86_400_000;
+    const readings = Array.from({ length: 5 }, (_, i) => ({
+      at: base + i * 60_000,
+      rms: 4.5 + i * 0.02,
+    }));
+
+    const first = await (
+      await ctx.post("/api/telemetry", { headers: bearer(TOKEN), data: { tag: TAG, readings } })
+    ).json();
+    expect(first.stored).toBe(5);
+    expect(first.duplicates).toBe(0);
+
+    const replay = await (
+      await ctx.post("/api/telemetry", { headers: bearer(TOKEN), data: { tag: TAG, readings } })
+    ).json();
+    expect(replay.stored, "a replay must store nothing").toBe(0);
+    expect(replay.duplicates).toBe(5);
+    expect(replay.ok, "and must not look like a failure to the bridge").toBe(true);
     await ctx.dispose();
   });
 
