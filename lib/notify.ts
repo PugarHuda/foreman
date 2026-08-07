@@ -62,7 +62,13 @@ export async function notify(event: NotifyEvent): Promise<boolean> {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...event, text }),
+      /* `text` and `content` carry the same string because the two most
+         likely destinations disagree about the name and neither tolerates
+         the other's: Slack (and Google Chat, Mattermost, Teams) reads `text`,
+         Discord reads `content` and rejects a body without it as an empty
+         message. Sending both costs one duplicated line and removes the
+         "which chat app is this" question from deployment entirely. */
+      body: JSON.stringify({ ...event, text, content: text }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) console.warn(`[foreman] notify ${event.kind}: ${res.status}`);

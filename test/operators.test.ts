@@ -14,7 +14,7 @@ import {
   resetLockouts,
   sessionOperator,
 } from "../lib/auth.ts";
-import { resetNotifications, shouldSend } from "../lib/notify.ts";
+import { notify, resetNotifications, shouldSend } from "../lib/notify.ts";
 
 const SECRET = "z".repeat(48);
 
@@ -166,5 +166,53 @@ describe("not paging the same person twice", () => {
     const now = Date.now();
     shouldSend("stale:CNC-07", now);
     assert.equal(shouldSend("stale:PRESS-02", now), true);
+  });
+});
+
+describe("the shape a chat app actually expects", () => {
+  const prior = process.env.NOTIFY_WEBHOOK_URL;
+  let seen: Record<string, unknown> | null = null;
+  const realFetch = globalThis.fetch;
+
+  before(() => {
+    process.env.NOTIFY_WEBHOOK_URL = "https://hook.example/test";
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      seen = JSON.parse(String(init.body));
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+  });
+  after(() => {
+    globalThis.fetch = realFetch;
+    if (prior === undefined) delete process.env.NOTIFY_WEBHOOK_URL;
+    else process.env.NOTIFY_WEBHOOK_URL = prior;
+  });
+  beforeEach(() => {
+    seen = null;
+    resetNotifications();
+  });
+
+  /* Slack reads `text`. Discord reads `content` and rejects a body without it
+     as an empty message. Sending both is what stops "which chat app is this"
+     being a deployment question. */
+  it("carries the message under both names", async () => {
+    await notify({ kind: "approval", title: "Order #7 needs approval", detail: "SPN-880, $4000" });
+
+    assert.ok(seen, "nothing was posted");
+    assert.equal(seen!.text, seen!.content);
+    assert.match(String(seen!.text), /Foreman.*Order #7 needs approval.*SPN-880/s);
+  });
+
+  it("keeps the structured fields alongside the rendered line", async () => {
+    await notify({ kind: "stale", title: "CNC-07 stopped reporting", detail: "no readings" });
+
+    assert.equal(seen!.kind, "stale");
+    assert.equal(seen!.title, "CNC-07 stopped reporting");
+  });
+
+  it("posts nothing at all when no webhook is configured", async () => {
+    delete process.env.NOTIFY_WEBHOOK_URL;
+    assert.equal(await notify({ kind: "failure", title: "x", detail: "y" }), false);
+    assert.equal(seen, null);
+    process.env.NOTIFY_WEBHOOK_URL = "https://hook.example/test";
   });
 });

@@ -201,7 +201,7 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 143 contract + unit tests, in-process EVM, no node needed
+npm test          # 146 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 
 # The pilot surfaces — ingest, the asset register, an ERP, a real login —
@@ -393,9 +393,14 @@ reasonably accept both, and being unable to start is its own kind of failure.
 The last three pieces turn a panel somebody watches into a thing that watches
 a line.
 
-**Notifications.** `NOTIFY_WEBHOOK_URL` gets a JSON POST carrying a `text`
-field, so Slack and Discord render it and everything else reads the structured
-fields beside it. It fires when an order needs a human, when a machine stops
+**Notifications.** `NOTIFY_WEBHOOK_URL` gets a JSON POST carrying the same
+message under both `text` and `content`, because the two most likely
+destinations disagree about the name and neither tolerates the other's — Slack
+(and Google Chat, Mattermost, Teams) reads `text`, Discord reads `content` and
+rejects a body without it as an empty message. The structured fields
+(`kind`, `title`, `detail`, `url`) ride alongside for anything that parses
+rather than renders. Any endpoint that accepts a POST works; there is no
+per-destination integration to pick. It fires when an order needs a human, when a machine stops
 reporting, when a run fails, and once per scheduled assessment. One webhook
 rather than an integration per destination, with a per-key cooldown so a
 polling dashboard does not page anyone sixty times an hour.
