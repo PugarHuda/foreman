@@ -402,8 +402,16 @@ polling dashboard does not page anyone sixty times an hour.
 
 **The schedule.** `POST /api/cron` with `CRON_TOKEN` runs a shift assessment
 at the newest hour on record — not a pinned one, or a schedule would assess
-the same moment every night for the rest of the pilot. `vercel.json` declares
-06:00/14:00/22:00; on-prem it is a crontab line. Deliberately not an
+the same moment every night for the rest of the pilot. `vercel.json` declares one
+daily run, which is all a Vercel Hobby plan permits — anything more frequent
+is rejected at deploy time, not at runtime, so a schedule that looks right in
+the file takes the whole deployment down. On-prem there is no such limit and a
+crontab line does shift changeover properly:
+
+```
+0 6,14,22 * * * curl -fsS -X POST -H "Authorization: Bearer $CRON_TOKEN" $URL/api/cron
+```
+ Deliberately not an
 in-process timer: a timer inside a web server fires twice with two instances
 and not at all while it is redeploying.
 

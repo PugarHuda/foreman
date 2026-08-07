@@ -2,9 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "comment": "Shift changeover, three times a day. Needs CRON_TOKEN set.",
       "path": "/api/cron",
-      "schedule": "0 6,14,22 * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }
