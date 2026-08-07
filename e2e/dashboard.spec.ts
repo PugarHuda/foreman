@@ -1,8 +1,19 @@
 import { test, expect } from "@playwright/test";
 
+test("the landing page hands a visitor to the control room", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("h1")).toContainText("asks for its own spare part");
+
+  // The point of the page is the click through. Every other assertion here
+  // would be testing prose.
+  await page.getByRole("link", { name: "Open the control room" }).first().click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.locator(".machine").first().waitFor();
+});
+
 test.describe("happy path — the control room reads correctly", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
   });
 
   test("shows the plant's financial position", async ({ page }) => {
@@ -106,7 +117,7 @@ test.describe("happy path — the control room reads correctly", () => {
       body.chainError = null;
       await route.fulfill({ json: body });
     });
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     // A delivered part can be issued to the machine.
     await expect(page.getByRole("button", { name: "Fit to machine" })).toBeVisible({
@@ -160,7 +171,7 @@ test.describe("happy path — the control room reads correctly", () => {
 
 test.describe("reachable without a mouse", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page.locator(".machine").first()).toBeVisible();
   });
 
@@ -225,7 +236,7 @@ test.describe("wrong path — a broken backend says so", () => {
     await page.route("**/api/state**", (route) =>
       route.fulfill({ status: 200, contentType: "text/html", body: "<html>gateway error</html>" }),
     );
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     // The failure mode to avoid is a dashboard of zeros that looks like a
     // working plant with no money.
@@ -236,7 +247,7 @@ test.describe("wrong path — a broken backend says so", () => {
     await page.route("**/api/state**", (route) =>
       route.fulfill({ status: 502, contentType: "application/json", body: '{"error":"upstream"}' }),
     );
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page.locator(".error")).toBeVisible({ timeout: 15_000 });
   });
 
@@ -250,7 +261,7 @@ test.describe("wrong path — a broken backend says so", () => {
       body.avoidedUsd = 0;
       await route.fulfill({ json: body });
     });
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     const values = page.locator(".strip .value");
     await expect(values.first()).toBeVisible();
@@ -261,14 +272,14 @@ test.describe("wrong path — a broken backend says so", () => {
   });
 
   test("real figures still render when the chain is readable", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page.locator(".strip .value").first()).toHaveText(/^\$[\d,]+$/, {
       timeout: 15_000,
     });
   });
 
   test("a connection that drops mid-request gives the control back", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page.locator(".machine").first()).toBeVisible();
 
     // Not a hang — an outright failed connection, which is the same code path
@@ -284,7 +295,7 @@ test.describe("wrong path — a broken backend says so", () => {
   });
 
   test("an agent failure surfaces the reason", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page.locator(".machine").first()).toBeVisible();
 
     await page.route("**/api/agent", (route) =>
@@ -301,7 +312,7 @@ test.describe("wrong path — a broken backend says so", () => {
   });
 
   test("a second agent run while one is in flight is explained", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page.locator(".machine").first()).toBeVisible();
 
     await page.route("**/api/agent", (route) =>
@@ -333,7 +344,7 @@ test.describe("wrong path — a broken backend says so", () => {
         }),
       }),
     );
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     await expect(page.getByText(/Something went wrong rendering the line/i)).toBeVisible({
       timeout: 15_000,
@@ -440,7 +451,7 @@ test.describe("wrong path — bad input is refused, not crashed on", () => {
       }),
     );
 
-    await page.goto("/");
+    await page.goto("/dashboard");
     const button = page.getByRole("button", { name: "Confirm receipt & pay" }).first();
     await expect(button).toBeVisible({ timeout: 15_000 });
 

@@ -74,7 +74,7 @@ const page = await context.newPage();
 
 try {
   say("opening the control room");
-  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
   // The dev-server badge is Next's, not the plant's. It has no business in a
   // recording or in the README hero.
   await page.addStyleTag({ content: "nextjs-portal { display: none }" });

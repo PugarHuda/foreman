@@ -19,9 +19,11 @@ queue](docs/dashboard.png)
 
 ## Live
 
-**[foreman-six-psi.vercel.app](https://foreman-six-psi.vercel.app)** — the real
-thing, wired to Base Sepolia. Press *Run agent* and it spends actual testnet
-money on your behalf.
+**[foreman-six-psi.vercel.app](https://foreman-six-psi.vercel.app)** — the
+pitch in one page, with the control room itself one click away at
+[`/dashboard`](https://foreman-six-psi.vercel.app/dashboard). It is wired to
+Base Sepolia: press *Run agent* and it spends actual testnet money on your
+behalf.
 
 That is deliberate, and the blast radius is the point: the agent key holds
 0.002 ETH of gas, the on-chain spend permission caps it at $2,000 a month, and
