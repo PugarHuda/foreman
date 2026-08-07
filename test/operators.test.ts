@@ -15,6 +15,7 @@ import {
   sessionOperator,
 } from "../lib/auth.ts";
 import { notify, resetNotifications, shouldSend } from "../lib/notify.ts";
+import { deniedIngest } from "../lib/guard.ts";
 
 const SECRET = "z".repeat(48);
 
@@ -150,22 +151,22 @@ describe("the session names who is signed in", () => {
 describe("not paging the same person twice", () => {
   beforeEach(() => resetNotifications());
 
-  it("sends the first time and stays quiet after", () => {
+  it("sends the first time and stays quiet after", async () => {
     const now = Date.now();
-    assert.equal(shouldSend("stale:CNC-07", now), true);
-    assert.equal(shouldSend("stale:CNC-07", now + 60_000), false);
+    assert.equal(await shouldSend("stale:CNC-07", now), true);
+    assert.equal(await shouldSend("stale:CNC-07", now + 60_000), false);
   });
 
-  it("speaks again once the cooldown has passed", () => {
+  it("speaks again once the cooldown has passed", async () => {
     const now = Date.now();
-    shouldSend("stale:CNC-07", now);
-    assert.equal(shouldSend("stale:CNC-07", now + 61 * 60_000), true);
+    await shouldSend("stale:CNC-07", now);
+    assert.equal(await shouldSend("stale:CNC-07", now + 61 * 60_000), true);
   });
 
-  it("does not let one machine's alert silence another's", () => {
+  it("does not let one machine's alert silence another's", async () => {
     const now = Date.now();
-    shouldSend("stale:CNC-07", now);
-    assert.equal(shouldSend("stale:PRESS-02", now), true);
+    await shouldSend("stale:CNC-07", now);
+    assert.equal(await shouldSend("stale:PRESS-02", now), true);
   });
 });
 
@@ -234,5 +235,56 @@ describe("the shape a chat app actually expects", () => {
     assert.equal(await notify({ kind: "failure", title: "x", detail: "y" }), false);
     assert.equal(seen, null);
     process.env.NOTIFY_WEBHOOK_URL = "https://hook.example/test";
+  });
+});
+
+describe("rotating a gateway key without silencing the sensors", () => {
+  const prior = process.env.TELEMETRY_TOKEN;
+  after(() => {
+    if (prior === undefined) delete process.env.TELEMETRY_TOKEN;
+    else process.env.TELEMETRY_TOKEN = prior;
+  });
+
+  const tryToken = (given?: string) =>
+    deniedIngest(
+      new Request("http://x/api/telemetry", {
+        method: "POST",
+        headers: given ? { Authorization: `Bearer ${given}` } : {},
+      }),
+    );
+
+  it("accepts the single token it was given", () => {
+    process.env.TELEMETRY_TOKEN = "only-one";
+    assert.equal(tryToken("only-one"), null);
+    assert.equal(tryToken("something-else")?.status, 401);
+  });
+
+  /* The point of the list: add the new key, move the gateways over one at a
+     time, then drop the old one. Without it there is a window where either the
+     old gateways or the new ones cannot report, and a gap in the trend is the
+     one thing this product cannot have. */
+  it("accepts both during a rotation", () => {
+    process.env.TELEMETRY_TOKEN = "old-key, new-key";
+    assert.equal(tryToken("old-key"), null);
+    assert.equal(tryToken("new-key"), null);
+    assert.equal(tryToken("retired-key")?.status, 401);
+  });
+
+  it("refuses everything once the list is empty", () => {
+    process.env.TELEMETRY_TOKEN = "  ,  ";
+    assert.equal(tryToken("anything")?.status, 503, "closed, not open, when unconfigured");
+  });
+
+  it("refuses a request carrying no token at all", () => {
+    process.env.TELEMETRY_TOKEN = "a-key";
+    assert.equal(tryToken()?.status, 401);
+  });
+
+  /* A prefix must not pass. The comparison is length-checked before
+     timingSafeEqual, which throws on a mismatch rather than returning false. */
+  it("does not accept a prefix of a valid token", () => {
+    process.env.TELEMETRY_TOKEN = "a-long-gateway-token";
+    assert.equal(tryToken("a-long")?.status, 401);
+    assert.equal(tryToken("a-long-gateway-token-and-more")?.status, 401);
   });
 });

@@ -111,6 +111,8 @@ export function machines(): Machine[] {
     m.seed ??= m.id;
     m.onsetHours ??= 0;
     m.downtimeCostPerHour ??= 0;
+    // One unnamed line is still one line, so the panel has a heading either way.
+    m.line ??= "Line 1";
   }
   return (assets = parsed as Machine[]);
 }

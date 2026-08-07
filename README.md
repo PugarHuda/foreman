@@ -215,12 +215,12 @@ actually runs at; the token behind them is one environment variable.
 ## Tests
 
 ```bash
-npm test          # 150 contract + unit tests, in-process EVM, no node needed
+npm test          # 165 contract + unit tests, in-process EVM, no node needed
 npm run test:e2e  # 32 browser tests, against localhost or a deployed instance
 
 # The pilot surfaces — ingest, the asset register, an ERP, a real login —
 # need an instance started in pilot configuration, so they are skipped unless
-# you point them at one. 38 pilot tests, happy path and wrong path.
+# you point them at one. 40 pilot tests, happy path and wrong path.
 PILOT_BASE_URL=http://localhost:3000 PILOT_TELEMETRY_TOKEN=… PILOT_PASSWORD=…   npx playwright test pilot
 ```
 
@@ -298,12 +298,19 @@ model provider choice makes.
 ```
 
 `MACHINES_FILE=machines.json`. The tag is what telemetry is posted against, so
-it has to match what the gateway calls the machine.
+it has to match what the gateway calls the machine. Give each asset a `line`
+and the panel groups by it — a plant is several lines, and forty machines under
+one heading is a list rather than an instrument. Several *plants* is a
+deployment each: the contract has one `plant` address and one treasury, and a
+tenancy model in Solidity would be solving what a second `FOREMAN_ADDRESS`
+already solves.
 
 ### 2. Telemetry
 
 `TELEMETRY_SOURCE=file` switches the replay off. Readings arrive at
-`POST /api/telemetry`, authenticated with `TELEMETRY_TOKEN`:
+`POST /api/telemetry`, authenticated with `TELEMETRY_TOKEN` — which is a
+comma-separated list, so a key can be rotated without a window where nothing
+can report: add the new one, move the gateways over, drop the old:
 
 ```
 Authorization: Bearer $TELEMETRY_TOKEN
@@ -402,7 +409,26 @@ this repo deploys, which would settle every invoice in tokens nobody accepts.
 when a supplier key is on the plant's server. A supervised pilot may
 reasonably accept both, and being unable to start is its own kind of failure.
 
-### 7. Running it unattended
+### 7. Shared state, when there is more than one process
+
+Three things kept their own in-memory copy and each carried a `ponytail:`
+comment admitting the ceiling: the notification cooldown, the agent's
+one-run-at-a-time lock, and the journal. On a single on-prem box that is
+correct. On serverless every cold start forgets — the cooldown stopped
+damping (it fired twice in testing for exactly this reason), two instances
+could both conclude no run was in flight, and the journal wrote to a disk that
+was discarded while reporting success.
+
+`REDIS_REST_URL` and `REDIS_REST_TOKEN` point all three at one store. Upstash
+over its REST API rather than a Redis client, because it is a fetch and a
+token and this repo does not need a connection pool for three keys.
+
+It fails **open**: a store that cannot be reached costs a duplicate
+notification, or at worst a second agent run that `AlreadyOnOrder` rejects on
+chain. Failing closed would mean no assessment at all because a cache blinked.
+Unset, everything behaves exactly as it did.
+
+### 8. Running it unattended
 
 The last three pieces turn a panel somebody watches into a thing that watches
 a line.
@@ -456,7 +482,7 @@ one of those is the plant key, so the chain cannot say which person approved
 the spindle. `GET /api/runs` serves both behind the operator gate, and the
 panel restores the last assessment on load.
 
-### 8. Named operators
+### 9. Named operators
 
 `OPERATORS_FILE` is a JSON array of `{ name, hash }` from `npm run passwd`. A
 lone `OPERATOR_PASSWORD_HASH` still works and reads as one account called
@@ -469,7 +495,7 @@ it. Locking one account does not lock the shift out, and the login does not
 reveal whether a name exists: an unknown operator is still charged a hash
 against a throwaway salt, so the timing and the message are identical.
 
-### 9. x402 — paying for data, never for goods
+### 10. x402 — paying for data, never for goods
 
 `X402_ENABLED=1` lets the agent pay a metered supplier or quote API that
 answers HTTP 402, signing EIP-3009 with the same key the contract knows.

@@ -8,6 +8,16 @@ export interface Machine {
   id: number;
   tag: string;
   name: string;
+  /**
+   * Which production line this asset sits on.
+   *
+   * One plant, several lines — which is what a plant actually looks like, and
+   * what makes the panel usable past three machines. Several *plants* is a
+   * deployment each: the contract has one `plant` address and one treasury,
+   * and pretending otherwise would mean a tenancy model in Solidity for a
+   * problem that a second `FOREMAN_ADDRESS` already solves.
+   */
+  line?: string;
   /** Consumable that fails first on this asset. */
   criticalPart: string;
   /**
@@ -44,6 +54,7 @@ export const MACHINES: Machine[] = [
     id: 7,
     tag: "CNC-07",
     name: "Mazak VCN-530 machining centre",
+    line: "Line 3 — machining",
     criticalPart: "6205-2RS",
     escalationPart: "SPN-880",
     downtimeCostPerHour: 890,
@@ -54,6 +65,7 @@ export const MACHINES: Machine[] = [
     id: 2,
     tag: "PRESS-02",
     name: "Aida 200t stamping press",
+    line: "Line 3 — machining",
     criticalPart: "HYD-SEAL-88",
     downtimeCostPerHour: 1450,
     seed: 11,
@@ -70,6 +82,7 @@ export const MACHINES: Machine[] = [
     id: 11,
     tag: "CONV-11",
     name: "Interroll line conveyor",
+    line: "Line 3 — machining",
     criticalPart: "6204-ZZ",
     downtimeCostPerHour: 320,
     seed: 5,

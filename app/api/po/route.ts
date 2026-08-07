@@ -94,11 +94,11 @@ export async function POST(req: Request) {
 
   try {
     const hash = await run(n);
-    recordAction({ at: new Date().toISOString(), operator, action: name, poId: n, hash });
+    await recordAction({ at: new Date().toISOString(), operator, action: name, poId: n, hash });
     return NextResponse.json({ hash, url: txUrl(hash) });
   } catch (e) {
     const error = explain(e);
-    recordAction({ at: new Date().toISOString(), operator, action: name, poId: n, error });
+    await recordAction({ at: new Date().toISOString(), operator, action: name, poId: n, error });
     // The move was refused by the contract, not broken by us.
     return NextResponse.json({ error }, { status: 409 });
   }

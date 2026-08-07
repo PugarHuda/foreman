@@ -16,6 +16,7 @@
  * Neither set, in production, means closed. An endpoint that moves funds does
  * not default to open because someone forgot an env var.
  */
+import { timingSafeEqual } from "node:crypto";
 import { cookieFrom, passwordAuthEnabled, validSession } from "./auth.ts";
 import { announceOnce, mainnetBlockers } from "./safety.ts";
 
@@ -65,13 +66,30 @@ export function denied(req: Request): Response | null {
  * silence the sensors and a leaked gateway token cannot spend anything.
  */
 export function deniedIngest(req: Request): Response | null {
-  const token = process.env.TELEMETRY_TOKEN;
-  if (!token) {
+  /* A comma-separated list, so a key can be rotated without a window where
+     nothing can report: add the new one, move the gateways over, drop the old.
+     One value is still one value, so nothing existing has to change. */
+  const accepted = (process.env.TELEMETRY_TOKEN ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  if (accepted.length === 0) {
     return Response.json(
       { error: "TELEMETRY_TOKEN is not set — telemetry ingest is closed." },
       { status: 503 },
     );
   }
-  const given = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  return given === token ? null : Response.json({ error: "unauthorized" }, { status: 401 });
+
+  const given = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  /* Compared in constant time against each candidate. A gateway token is a
+     bearer credential like any other, and a length-varying compare on a
+     public endpoint is a free hint. */
+  const ok = accepted.some((t) => {
+    const a = Buffer.from(t);
+    const b = Buffer.from(given);
+    return a.length === b.length && timingSafeEqual(a, b);
+  });
+
+  return ok ? null : Response.json({ error: "unauthorized" }, { status: 401 });
 }

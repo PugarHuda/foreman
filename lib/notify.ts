@@ -11,6 +11,8 @@
  * and everything else (n8n, Zapier, a Telegram bridge, a plant's own
  * andon board) reads the structured fields next to it.
  */
+import { claim, resetStore } from "./store.ts";
+
 export type NotifyKind = "approval" | "stale" | "failure" | "budget";
 
 export interface NotifyEvent {
@@ -28,23 +30,19 @@ const webhook = () => process.env.NOTIFY_WEBHOOK_URL;
 /** How long the same key stays quiet after firing once. */
 const cooldownMs = () => Number(process.env.NOTIFY_COOLDOWN_MINUTES ?? 60) * 60_000;
 
-/*
- * ponytail: in-memory, so a restart re-notifies and a second instance
- * notifies twice. That is the right trade for one on-prem box — the failure
- * mode is a duplicate message, and the alternative is a shared store for the
- * sake of alert de-duplication. Move it to Redis if you ever run two.
+/**
+ * The cooldown is a claim nobody releases: hold the key for its duration and
+ * whoever tries next is told no. Shared when a store is configured, so two
+ * serverless instances do not each page the same person about the same
+ * machine — which is exactly what happened before, because a cold start
+ * forgets a Map.
  */
-const lastSent = new Map<string, number>();
-
-export function shouldSend(key: string, nowMs = Date.now()): boolean {
-  const previous = lastSent.get(key);
-  if (previous !== undefined && nowMs - previous < cooldownMs()) return false;
-  lastSent.set(key, nowMs);
-  return true;
+export function shouldSend(key: string, nowMs = Date.now()): Promise<boolean> {
+  return claim(`notify:${key}`, cooldownMs() / 1000, nowMs);
 }
 
 /** Exposed so a test starts from silence rather than from another test's state. */
-export const resetNotifications = () => lastSent.clear();
+export const resetNotifications = () => resetStore();
 
 /**
  * Fire and forget. A webhook that is down must never take out the thing it
@@ -54,7 +52,7 @@ export const resetNotifications = () => lastSent.clear();
 export async function notify(event: NotifyEvent): Promise<boolean> {
   const url = webhook();
   if (!url) return false;
-  if (!shouldSend(event.key ?? event.kind)) return false;
+  if (!(await shouldSend(event.key ?? event.kind))) return false;
 
   const text = `[Foreman] ${event.title}\n${event.detail}${event.url ? `\n${event.url}` : ""}`;
 

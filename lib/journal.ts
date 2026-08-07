@@ -14,10 +14,16 @@
  * and a plant runs a handful a day, so a year fits in a few MB and grep
  * answers most questions. A database earns its place when you want to query
  * across plants, not before.
+ *
+ * On a serverless host there is no disk that survives, and this wrote to one
+ * anyway — the writes appeared to succeed and the records were gone with the
+ * instance. When a store is configured it goes there instead, which is what
+ * makes the journal true on Vercel rather than merely quiet.
  */
 import fs from "node:fs";
 import path from "node:path";
 import type { AgentStep } from "./agent.ts";
+import { push, storeKind, tail } from "./store.ts";
 
 export const journalDir = () => process.env.JOURNAL_DIR ?? "data/journal";
 
@@ -60,8 +66,15 @@ function append(name: "runs" | "actions", record: unknown): boolean {
   }
 }
 
-export const recordRun = (run: RunRecord) => append("runs", run);
-export const recordAction = (action: ActionRecord) => append("actions", action);
+export async function recordRun(run: RunRecord): Promise<boolean> {
+  if (storeKind() !== "memory") return push("foreman:runs", JSON.stringify(run));
+  return append("runs", run);
+}
+
+export async function recordAction(action: ActionRecord): Promise<boolean> {
+  if (storeKind() !== "memory") return push("foreman:actions", JSON.stringify(action));
+  return append("actions", action);
+}
 
 /**
  * The most recent entries, newest first.
@@ -70,7 +83,7 @@ export const recordAction = (action: ActionRecord) => append("actions", action);
  * that is cheaper than the code to seek backwards through it, and it is
  * correct on a file being appended to concurrently, which seeking is not.
  */
-function tail<T>(name: "runs" | "actions", limit: number): T[] {
+function readTail<T>(name: "runs" | "actions", limit: number): T[] {
   try {
     const file = fileFor(name);
     if (!fs.existsSync(file)) return [];
@@ -90,5 +103,18 @@ function tail<T>(name: "runs" | "actions", limit: number): T[] {
   }
 }
 
-export const recentRuns = (limit = 20) => tail<RunRecord>("runs", limit);
-export const recentActions = (limit = 50) => tail<ActionRecord>("actions", limit);
+async function recent<T>(name: "runs" | "actions", limit: number): Promise<T[]> {
+  if (storeKind() !== "memory") {
+    return (await tail(`foreman:${name}`, limit)).flatMap((line) => {
+      try {
+        return [JSON.parse(line) as T];
+      } catch {
+        return [];
+      }
+    });
+  }
+  return readTail<T>(name, limit);
+}
+
+export const recentRuns = (limit = 20) => recent<RunRecord>("runs", limit);
+export const recentActions = (limit = 50) => recent<ActionRecord>("actions", limit);

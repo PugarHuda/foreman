@@ -278,7 +278,7 @@ supplier paid            on confirmed receipt, against a despatch document`}</pr
           </div>
           <div>
             <div className="eyebrow">Tests</div>
-            <div className="value">220</div>
+            <div className="value">237</div>
             <div className="sub">across contract, unit, browser and pilot</div>
           </div>
         </div>

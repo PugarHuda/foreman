@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await runAgent(hours);
-    recordRun({ at, hours: result.hours, summary: result.summary, steps: result.steps, trigger: "schedule" });
+    await recordRun({ at, hours: result.hours, summary: result.summary, steps: result.steps, trigger: "schedule" });
 
     /* Nobody is watching a scheduled run, so its summary has to travel. The
        approval notice fires from inside the agent; this is the shift report. */
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, hours: result.hours, summary: result.summary });
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
-    recordRun({ at, hours, summary: "", steps: [], trigger: "schedule", error });
+    await recordRun({ at, hours, summary: "", steps: [], trigger: "schedule", error });
     await notify({
       kind: "failure",
       key: "agent-failure",

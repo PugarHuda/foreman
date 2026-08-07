@@ -1,9 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" fill="#0b0e11" />
-  <!-- the ISO severity rail, which is what this whole product is about -->
-  <rect x="4" y="13" width="7" height="6" fill="#3fb27f" />
-  <rect x="11" y="13" width="4" height="6" fill="#c2cc4a" />
-  <rect x="15" y="13" width="7" height="6" fill="#e8a33d" />
-  <rect x="22" y="13" width="6" height="6" fill="#e5484d" />
-  <rect x="14" y="9" width="2" height="14" fill="#e6ebf0" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- the ISO severity rail, which is what this whole product is about.
+       Kept identical to public/brand/logo-mark.svg. -->
+  <rect width="64" height="64" rx="4" fill="#0b0e11"/>
+  <rect x="6" y="16" width="13.72" height="32" fill="#3fb27f"/>
+  <rect x="20.72" y="16" width="8.33" height="32" fill="#c2cc4a"/>
+  <rect x="30.05" y="16" width="12.74" height="32" fill="#e8a33d"/>
+  <rect x="43.79" y="16" width="14.21" height="32" fill="#e5484d"/>
+  <rect x="27.5" y="11" width="4" height="42" fill="#e6ebf0"/>
 </svg>

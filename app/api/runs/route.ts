@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   const limit = Math.min(Math.max(Number(raw) || 20, 1), 200);
 
   return Response.json({
-    runs: recentRuns(limit),
-    actions: recentActions(limit),
+    runs: await recentRuns(limit),
+    actions: await recentActions(limit),
   });
 }

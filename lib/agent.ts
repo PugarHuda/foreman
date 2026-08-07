@@ -135,6 +135,7 @@ export async function snapshot(elapsedHours = DEFAULT_ELAPSED_HOURS) {
         tag: m.tag,
         name: m.name,
         criticalPart: m.criticalPart,
+        line: m.line ?? "Line 1",
         downtimeCostPerHour: m.downtimeCostPerHour,
         stock: await stockOf(m.criticalPart),
         reporting,
@@ -480,7 +481,7 @@ export async function runAgent(
     { role: "system", content: SYSTEM },
     {
       role: "user",
-      content: `Shift handover. Machines on this line: ${machines().map((m) => `${m.tag} (id ${m.id})`).join(
+      content: `Shift handover. Machines: ${machines().map((m) => `${m.tag} (id ${m.id}, ${m.line ?? "Line 1"})`).join(
         ", ",
       )}. Telemetry is current as of run-hour ${elapsedHours}. Assess and act.`,
     },

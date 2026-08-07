@@ -75,7 +75,39 @@ test.describe("happy path — a plant's own machine and its own readings", () =>
   test("the panel renders the pilot machine rather than an empty page", async ({ page }) => {
     await page.goto(`${BASE}/dashboard`);
     await expect(page.getByText(TAG, { exact: true })).toBeVisible();
-    await expect(page.locator(".machine .rms").first()).toHaveText(/^\d+\.\d{2}$/);
+    await expect(page.locator(".machine .rms").first()).toHaveText(/^(\d+\.\d{2}|—)$/);
+  });
+
+  /* The default machine id is the demo fixture's, and a pilot register has no
+     such machine. /api/state falls back correctly; the panel used to keep
+     asking for the one that does not exist and render every dependent panel
+     blank. */
+  test("adopts the machine the server resolved, not the fixture's default", async ({ page }) => {
+    await page.goto(`${BASE}/dashboard`);
+    await page.locator(".machine").first().waitFor();
+
+    const heading = page.locator(".panel header h2").filter({ hasText: "vibration trend" });
+    await expect(heading).not.toHaveText(/^\s*vibration trend$/);
+  });
+
+  /* Zero is the healthiest reading on the scale. A machine that has never
+     reported must not render as one sitting at 0.00 on a green rail — the
+     agent was already told this and the panel was still showing it. */
+  test("shows a machine that is not reporting as having no signal", async ({ page }) => {
+    const ctx = await api();
+    const body = await (await ctx.get("/api/state")).json();
+    await ctx.dispose();
+
+    const silent = body.machines.find((m: { reporting: boolean }) => !m.reporting);
+    test.skip(!silent, "every registered machine is reporting on this instance");
+
+    await page.goto(`${BASE}/dashboard`);
+    const card = page.locator(".machine", { hasText: silent.tag });
+    await expect(card.locator(".rms")).toHaveText("—");
+    await expect(card).toContainText(/no telemetry on record|stopped reporting/);
+    await expect(card.locator(".rail"), "no severity rail for a machine with no reading").toHaveCount(
+      0,
+    );
   });
 
   /* A dead gateway leaves a flat tail on a healthy number, which is what a

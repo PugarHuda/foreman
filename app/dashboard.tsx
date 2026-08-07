@@ -98,6 +98,7 @@ interface Machine {
   tag: string;
   name: string;
   criticalPart: string;
+  line: string;
   downtimeCostPerHour: number;
   stock: number;
   currentRms: number;
@@ -218,6 +219,14 @@ export default function Dashboard() {
 
       setData(json);
       setLoadError(null);
+
+      /* The default machine id is the fixture's. A pilot registers its own, so
+         adopt whichever one the server actually resolved — otherwise every
+         panel keyed off `selected` renders blank against a register that has
+         no machine 7. */
+      if (typeof json.machineId === "number" && json.machineId !== machineId) {
+        setMachineId(json.machineId);
+      }
     } catch (e) {
       setLoadError(
         `Cannot read the line — ${e instanceof Error ? e.message : String(e)}. The figures below are not live.`,
@@ -353,6 +362,16 @@ export default function Dashboard() {
   }
 
   const chain = data?.chain ?? null;
+
+  /* A plant is several lines, and a panel that lists forty machines under one
+     heading is a list, not an instrument. Grouped in registration order rather
+     than sorted, so the order on screen is the order somebody chose. */
+  const lines: [string, Machine[]][] = [];
+  for (const m of data?.machines ?? []) {
+    const found = lines.find(([name]) => name === (m.line ?? "Line 1"));
+    if (found) found[1].push(m);
+    else lines.push([m.line ?? "Line 1", [m]]);
+  }
   const selected = data?.machines.find((m) => m.id === machineId);
   const waiting = chain?.pos.filter((p) => p.status === "Proposed") ?? [];
   /* Orders still in play stay on screen; ones that are done fold away, or the
@@ -437,13 +456,14 @@ export default function Dashboard() {
 
       <div className="columns">
         <div className="stack">
-          <section className="panel">
+          {lines.map(([line, onLine]) => (
+          <section className="panel" key={line}>
             <header>
-              <h2 style={{ fontSize: 13 }}>Line 3 — machining</h2>
+              <h2 style={{ fontSize: 13 }}>{line}</h2>
               <span className="eyebrow">ISO 10816-3 class II</span>
             </header>
             <div className="machines">
-              {data?.machines.map((m) => (
+              {onLine.map((m) => (
                 <button
                   key={m.id}
                   className="machine"
@@ -452,24 +472,46 @@ export default function Dashboard() {
                 >
                   <div className="tag">{m.tag}</div>
                   <div className="name">{m.name}</div>
-                  <div className="reading">
-                    <span className="rms">{m.currentRms.toFixed(2)}</span>
-                    <span className="unit">mm/s RMS</span>
-                  </div>
-                  <Rail rms={m.currentRms} />
-                  <div className="rul">
-                    {m.rulHours === null ? (
-                      <>trend flat — no failure projected</>
-                    ) : (
-                      <>
-                        zone D in <b>{m.rulHours} h</b> · {money(m.downtimeCostPerHour)}/h if it stops
-                      </>
-                    )}
-                  </div>
+                  {/* A machine that is not reporting must never render as one
+                      reading 0.00 mm/s on a green rail. Zero is the healthiest
+                      number on the scale, and silence is not health — the agent
+                      was already told this and the panel was still showing it. */}
+                  {m.reporting === false ? (
+                    <>
+                      <div className="reading">
+                        <span className="rms">—</span>
+                        <span className="unit">no signal</span>
+                      </div>
+                      <div className="rul">
+                        {m.stale
+                          ? "stopped reporting — the last reading is not current"
+                          : "no telemetry on record for this machine"}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="reading">
+                        <span className="rms">{m.currentRms.toFixed(2)}</span>
+                        <span className="unit">mm/s RMS</span>
+                      </div>
+                      <Rail rms={m.currentRms} />
+                      <div className="rul">
+                        {m.rulHours === null ? (
+                          <>trend flat — no failure projected</>
+                        ) : (
+                          <>
+                            zone D in <b>{m.rulHours} h</b> · {money(m.downtimeCostPerHour)}/h if it
+                            stops
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </button>
               ))}
             </div>
           </section>
+          ))}
 
           <section className="panel">
             <header>

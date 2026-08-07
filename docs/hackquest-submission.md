@@ -11,13 +11,27 @@ limits the form shows.
 Foreman
 ```
 
-## Intro (0 / 200)
+## Intro (limit 200)
 
 ```
-A maintenance agent watches machine vibration, buys the spare part before the line stops, and settles it in on-chain escrow under a spend permission a human signed once. Routine executes; exceptions wait.
+An agent watches machine vibration and buys the spare part before the line stops, settling it in on-chain escrow. Routine orders execute alone; anything larger waits for a human.
 ```
 
-*(199 characters)*
+**178 characters, 29 words** — comfortably inside the limit whether the form
+counts characters or words.
+
+The first draft here was 204 characters and overflowed. If you want it shorter
+still, either of these says the same thing:
+
+```
+A maintenance agent watches machine vibration, buys the spare part before the line stops, and settles it in on-chain escrow under a limit a human signed once.
+```
+*(158 characters, 27 words)*
+
+```
+Predictive maintenance that settles its own invoice: an agent buys the bearing before the line stops, in on-chain escrow, under a spend limit a human signed once.
+```
+*(162 characters, 27 words)*
 
 ## Sector (max 4)
 
