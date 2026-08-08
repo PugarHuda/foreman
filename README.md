@@ -48,7 +48,20 @@ than off a screenshot taken three days ago. Print to PDF from the browser: the
 stylesheet swaps to a light palette that is contrast-checked like the dark one.
 
 **[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
-straight off the running app by `scripts/record-demo.mjs`.
+straight off the running app by `scripts/record-demo.mjs`. Every figure in it
+is a real transaction against the contract above.
+
+**[Watch the pitch](public/pitch.mp4)** — two minutes, narrated, with captions
+([`docs/pitch.srt`](docs/pitch.srt) for anywhere burned-in is not enough).
+Built with Remotion from `video/`, and its product footage is real screenshots
+of the running deployment rather than a redrawn mock: a pitch that illustrates
+its product with an illustration is saying the product cannot be filmed.
+
+The narration is synthesised, and the timings are measured off the rendered
+audio with ffprobe rather than estimated — so a caption cannot drift from the
+line it belongs to. `npm run voice` re-renders the voice (`-- --voice am_adam`
+picks another), `npm run capture` retakes the footage, `npm run video:pitch`
+renders. Editing one line re-renders one line.
 
 The transactions behind it, which you can check yourself:
 

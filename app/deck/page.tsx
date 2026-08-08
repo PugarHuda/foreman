@@ -84,6 +84,9 @@ export default async function Deck() {
           <Link className="btn primary" href="/dashboard">
             See it run
           </Link>
+          <a className="btn" href="/pitch.mp4">
+            Watch the pitch
+          </a>
           <a className="btn" href="https://github.com/PugarHuda/foreman">
             Read the source
           </a>

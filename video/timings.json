@@ -1,0 +1,161 @@
+{
+  "voice": "am_adam",
+  "speed": 0.95,
+  "total": 120.32500000000002,
+  "lines": [
+    {
+      "id": "01",
+      "scene": "cold-open",
+      "say": "A bearing on a machining line has fifty-eight hours of life left. Nobody is watching at two in the morning.",
+      "caption": "A bearing has 58 hours of life left.\nNobody is watching at 02:00.",
+      "hash": "e17954b1984e",
+      "file": "vo/01.wav",
+      "start": 0,
+      "duration": 6.85,
+      "gap": 0.45
+    },
+    {
+      "id": "02",
+      "scene": "problem",
+      "say": "Industrial four point zero put sensors on the machine. It left a human to read the dashboard, raise a requisition, chase three quotes, and wait for a purchase order number.",
+      "caption": "Industrial 4.0 put sensors on the machine.\nIt left a human to raise a requisition, chase three\nquotes, and wait for a PO number.",
+      "hash": "46034e88e47a",
+      "file": "vo/02.wav",
+      "start": 7.3,
+      "duration": 10.775,
+      "gap": 0.45
+    },
+    {
+      "id": "03",
+      "scene": "problem",
+      "say": "The data was automated. The decision to cash loop was not. And that is the one that costs a shift.",
+      "caption": "The data was automated.\nThe decision-to-cash loop was not.",
+      "hash": "9529aad86fbe",
+      "file": "vo/03.wav",
+      "start": 18.525,
+      "duration": 6.55,
+      "gap": 0.45
+    },
+    {
+      "id": "04",
+      "scene": "cost",
+      "say": "An unplanned stop on that machine costs eight hundred and ninety dollars an hour. The bearing costs one hundred and eighty.",
+      "caption": "The stop costs $890/hour.\nThe bearing costs $180.",
+      "hash": "b47bfd9aa6e3",
+      "file": "vo/04.wav",
+      "start": 25.525,
+      "duration": 7.65,
+      "gap": 0.45
+    },
+    {
+      "id": "05",
+      "scene": "loop",
+      "say": "Foreman closes the loop. It fits the vibration trend log-linearly, and projects the hour the bearing crosses the standard's stop-the-machine threshold.",
+      "caption": "Foreman fits the trend log-linearly and projects\nthe ISO 10816-3 Zone D crossing.",
+      "hash": "e3efe5536be3",
+      "file": "vo/05.wav",
+      "start": 33.625,
+      "duration": 9.775,
+      "gap": 0.45
+    },
+    {
+      "id": "06",
+      "scene": "loop",
+      "say": "If the shelf is empty, and no supplier lead time beats the failure, it buys the part. Payment settles into on-chain escrow, against a spend permission the plant manager signed weeks earlier.",
+      "caption": "Empty shelf, no lead time that beats the failure —\nit buys, into escrow, under a permission\nsigned weeks earlier.",
+      "hash": "33bba452bdf8",
+      "file": "vo/06.wav",
+      "start": 43.85,
+      "duration": 12.55,
+      "gap": 0.45
+    },
+    {
+      "id": "07",
+      "scene": "lanes",
+      "say": "A one hundred and eighty dollar bearing executes alone.",
+      "caption": "$180 bearing — executes alone.",
+      "hash": "1c1c570ee95d",
+      "file": "vo/07.wav",
+      "start": 56.85,
+      "duration": 4.125,
+      "gap": 0.45
+    },
+    {
+      "id": "08",
+      "scene": "lanes",
+      "say": "A four thousand dollar spindle stops, and waits for a person.",
+      "caption": "$4,000 spindle — stops for a person.",
+      "hash": "6843cb4dff41",
+      "file": "vo/08.wav",
+      "start": 61.425000000000004,
+      "duration": 4.35,
+      "gap": 0.45
+    },
+    {
+      "id": "09",
+      "scene": "lanes",
+      "say": "That split is enforced by the contract. Not by a policy document nobody opens.",
+      "caption": "The split is enforced on chain.\nNot in a policy document.",
+      "hash": "4c2223ae5edb",
+      "file": "vo/09.wav",
+      "start": 66.22500000000001,
+      "duration": 5.95,
+      "gap": 0.45
+    },
+    {
+      "id": "10",
+      "scene": "product",
+      "say": "This is the control room. Machine health on the severity rail, the projected crossing, and the agent reasoning its way to a decision about money, as it happens.",
+      "caption": "The control room: severity rail, projected crossing,\nand the agent reasoning, live.",
+      "hash": "59c1f0f06cc0",
+      "file": "vo/10.wav",
+      "start": 72.62500000000001,
+      "duration": 10.05,
+      "gap": 0.45
+    },
+    {
+      "id": "11",
+      "scene": "trust",
+      "say": "The agent cannot invent a payee. It cannot re-buy a part already on its way. It cannot overspend, and it cannot release escrow on a bare click.",
+      "caption": "Cannot invent a payee. Cannot re-buy what is coming.\nCannot overspend. Cannot release escrow on a click.",
+      "hash": "65032febe825",
+      "file": "vo/11.wav",
+      "start": 83.12500000000001,
+      "duration": 9.225,
+      "gap": 0.45
+    },
+    {
+      "id": "12",
+      "scene": "trust",
+      "say": "Prompt injection, a hallucinated address, a compromised model provider — all of them end at the same place. A revert.",
+      "caption": "Prompt injection, a hallucinated address,\na compromised provider — all end at a revert.",
+      "hash": "b9d93a3a87b7",
+      "file": "vo/12.wav",
+      "start": 92.80000000000001,
+      "duration": 7.75,
+      "gap": 0.45
+    },
+    {
+      "id": "13",
+      "scene": "live",
+      "say": "It is running on Base Sepolia right now, and it is verified. Press run agent, and it spends real testnet money on your behalf — bounded by the same contract a plant would rely on.",
+      "caption": "Live on Base Sepolia, verified.\nPress Run agent and it spends real testnet money,\nbounded by the same contract.",
+      "hash": "1f30c935a3d2",
+      "file": "vo/13.wav",
+      "start": 101.00000000000001,
+      "duration": 11.8,
+      "gap": 0.45
+    },
+    {
+      "id": "14",
+      "scene": "close",
+      "say": "Foreman. The machine asks for its own spare part. A human sets the limit, once.",
+      "caption": "The machine asks for its own spare part.\nA human sets the limit, once.",
+      "hash": "c72404279c8c",
+      "file": "vo/14.wav",
+      "start": 113.25000000000001,
+      "duration": 5.475,
+      "gap": 1.6
+    }
+  ]
+}

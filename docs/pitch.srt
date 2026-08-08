@@ -1,0 +1,70 @@
+1
+00:00:00,000 --> 00:00:06,850
+A bearing has 58 hours of life left.
+Nobody is watching at 02:00.
+
+2
+00:00:07,300 --> 00:00:18,075
+Industrial 4.0 put sensors on the machine.
+It left a human to raise a requisition, chase three
+quotes, and wait for a PO number.
+
+3
+00:00:18,525 --> 00:00:25,075
+The data was automated.
+The decision-to-cash loop was not.
+
+4
+00:00:25,525 --> 00:00:33,175
+The stop costs $890/hour.
+The bearing costs $180.
+
+5
+00:00:33,625 --> 00:00:43,400
+Foreman fits the trend log-linearly and projects
+the ISO 10816-3 Zone D crossing.
+
+6
+00:00:43,850 --> 00:00:56,400
+Empty shelf, no lead time that beats the failure —
+it buys, into escrow, under a permission
+signed weeks earlier.
+
+7
+00:00:56,850 --> 00:01:00,975
+$180 bearing — executes alone.
+
+8
+00:01:01,425 --> 00:01:05,775
+$4,000 spindle — stops for a person.
+
+9
+00:01:06,225 --> 00:01:12,175
+The split is enforced on chain.
+Not in a policy document.
+
+10
+00:01:12,625 --> 00:01:22,675
+The control room: severity rail, projected crossing,
+and the agent reasoning, live.
+
+11
+00:01:23,125 --> 00:01:32,350
+Cannot invent a payee. Cannot re-buy what is coming.
+Cannot overspend. Cannot release escrow on a click.
+
+12
+00:01:32,800 --> 00:01:40,550
+Prompt injection, a hallucinated address,
+a compromised provider — all end at a revert.
+
+13
+00:01:41,000 --> 00:01:52,800
+Live on Base Sepolia, verified.
+Press Run agent and it spends real testnet money,
+bounded by the same contract.
+
+14
+00:01:53,250 --> 00:01:58,725
+The machine asks for its own spare part.
+A human sets the limit, once.

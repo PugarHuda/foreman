@@ -18,15 +18,23 @@
     "deploy": "node scripts/deploy.mjs",
     "seed": "node --env-file=.env scripts/seed-demo.ts",
     "passwd": "node scripts/passwd.mjs",
-    "bridge": "node scripts/telemetry-bridge.mjs"
+    "bridge": "node scripts/telemetry-bridge.mjs",
+    "voice": "node --env-file=.env scripts/voice.mjs",
+    "capture": "node scripts/capture.mjs",
+    "video:studio": "remotion studio video/index.ts",
+    "video:pitch": "remotion render video/index.ts Pitch public/pitch.mp4 --crf 26"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
     "@openzeppelin/contracts": "^5.6.1",
     "@playwright/test": "^1.62.1",
+    "@remotion/bundler": "^4.0.507",
+    "@remotion/cli": "^4.0.507",
+    "@remotion/renderer": "^4.0.507",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "hardhat": "^3.12.0",
+    "remotion": "^4.0.507",
     "typescript": "^5.9.3",
     "wait-on": "^9.1.0"
   },

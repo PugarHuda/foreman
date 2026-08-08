@@ -80,8 +80,15 @@ lead with the real thing.
 
 ## Demo Video
 
-`docs/demo.webm` — the whole loop, unedited, recorded straight off the running
-app by `scripts/record-demo.mjs`. Upload it or link an unlisted YouTube copy.
+`docs/demo.webm` — the whole loop, unedited, 2m19s, recorded straight off the
+running app by `scripts/record-demo.mjs`. Every figure in it is a real
+transaction against the deployed contract.
+
+## Pitch Video
+
+`public/pitch.mp4` — 2m01s, 1920x1080, narrated with burned-in captions.
+`docs/pitch.srt` is the subtitle track if the platform wants one it can
+translate or let a viewer turn off.
 
 ---
 
