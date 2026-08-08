@@ -80,15 +80,24 @@ lead with the real thing.
 
 ## Demo Video
 
-`docs/demo.webm` — the whole loop, unedited, 2m19s, recorded straight off the
-running app by `scripts/record-demo.mjs`. Every figure in it is a real
-transaction against the deployed contract.
+```
+https://foreman-six-psi.vercel.app/demo.mp4
+```
+
+2m19s, H.264. The whole loop, unedited, recorded straight off the running app
+by `scripts/record-demo.mjs`. Every figure in it is a real transaction against
+the deployed contract. Repo copy: `public/demo.mp4` (and `docs/demo.webm`, the
+VP9 original).
 
 ## Pitch Video
 
-`public/pitch.mp4` — 2m01s, 1920x1080, narrated with burned-in captions.
-`docs/pitch.srt` is the subtitle track if the platform wants one it can
-translate or let a viewer turn off.
+```
+https://foreman-six-psi.vercel.app/pitch.mp4
+```
+
+2m01s, 1920x1080, narrated with burned-in captions. Repo copy:
+`public/pitch.mp4`. `docs/pitch.srt` is the subtitle track if the platform
+wants one it can translate or let a viewer turn off.
 
 ---
 

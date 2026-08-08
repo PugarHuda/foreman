@@ -47,11 +47,20 @@ version of it and its numbers are read off the contract at render time rather
 than off a screenshot taken three days ago. Print to PDF from the browser: the
 stylesheet swaps to a light palette that is contrast-checked like the dark one.
 
-**[Watch the demo](docs/demo.webm)** — the whole loop, unedited, recorded
-straight off the running app by `scripts/record-demo.mjs`. Every figure in it
-is a real transaction against the contract above.
+Two videos, both served from the live site so nothing has to be downloaded to
+be watched:
 
-**[Watch the pitch](public/pitch.mp4)** — two minutes, narrated, with captions
+| | | |
+|---|---|---|
+| **Demo** | [foreman-six-psi.vercel.app/demo.mp4](https://foreman-six-psi.vercel.app/demo.mp4) | 2m19s — the whole loop, unedited, recorded straight off the running app. Every figure in it is a real transaction against the contract above |
+| **Pitch** | [foreman-six-psi.vercel.app/pitch.mp4](https://foreman-six-psi.vercel.app/pitch.mp4) | 2m01s — narrated, captioned |
+
+The demo is recorded by `scripts/record-demo.mjs`, which drives the real app
+with Playwright. It writes `docs/demo.webm` and the H.264 copy the site serves
+— Playwright records VP9, which Safari will not play, so the two are produced
+together rather than by hand.
+
+**The pitch** — two minutes, narrated, with captions
 ([`docs/pitch.srt`](docs/pitch.srt) for anywhere burned-in is not enough).
 Built with Remotion from `video/`, and its product footage is real screenshots
 of the running deployment rather than a redrawn mock: a pitch that illustrates

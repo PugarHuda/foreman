@@ -190,6 +190,19 @@ try {
   fs.rmSync(raw, { force: true });
   const mb = (fs.statSync(target).size / 1e6).toFixed(1);
   console.log(`\nwrote ${target} (${mb} MB, down from ${rawMb} MB)`);
+
+  /* Playwright records VP9 webm, which Safari will not play — so a judge on a
+     Mac opening the site gets an empty box. The copy the site serves is H.264,
+     written here rather than by hand so the two cannot drift apart. */
+  execFileSync("ffmpeg", [
+    "-v", "error",
+    "-i", target,
+    "-c:v", "libx264", "-preset", "slow", "-crf", "28",
+    "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an",
+    "public/demo.mp4", "-y",
+  ]);
+  const servable = (fs.statSync("public/demo.mp4").size / 1e6).toFixed(1);
+  console.log(`wrote public/demo.mp4 (${servable} MB) — this is the one the site links`);
 } catch {
   // No ffmpeg: keep the raw file rather than losing the recording.
   if (webm.f !== "demo.webm") {
