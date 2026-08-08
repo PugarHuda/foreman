@@ -306,6 +306,19 @@ bearing health
   ✔ crosses into Zone D by the end of the run
 ```
 
+### Submitting it somewhere
+
+```bash
+npm run submission
+```
+
+Gathers the videos, the four gallery images, both logos, the subtitles, the
+product screenshot and the form text into `submission/`, named for the field
+each one goes in. The folder is gitignored — copying 15 MB of video into the
+repo a second time to save a few clicks is a bad trade — and a missing file is
+named rather than skipped, because a missing video is the difference between a
+complete submission and one that looks complete.
+
 ## Running a pilot
 
 The demo defaults are fixtures. Every one of them is a seam with an env var in

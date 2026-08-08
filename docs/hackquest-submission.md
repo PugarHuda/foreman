@@ -11,27 +11,21 @@ limits the form shows.
 Foreman
 ```
 
-## Intro (limit 200)
+## Intro — 185 / 200 characters
 
 ```
-An agent watches machine vibration and buys the spare part before the line stops, settling it in on-chain escrow. Routine orders execute alone; anything larger waits for a human.
+An agent watches machine vibration and buys the spare part before the line stops, settling it in on-chain USDC escrow. A $180 bearing executes alone; a $4,000 spindle waits for a human.
 ```
 
-**178 characters, 29 words** — comfortably inside the limit whether the form
-counts characters or words.
+The limit is characters, not words. This one carries both figures, which is
+the whole argument, and still leaves 15 characters of headroom.
 
-The first draft here was 204 characters and overflowed. If you want it shorter
-still, either of these says the same thing:
-
-```
-A maintenance agent watches machine vibration, buys the spare part before the line stops, and settles it in on-chain escrow under a limit a human signed once.
-```
-*(158 characters, 27 words)*
+Shorter, if the field counts differently than it displays:
 
 ```
-Predictive maintenance that settles its own invoice: an agent buys the bearing before the line stops, in on-chain escrow, under a spend limit a human signed once.
+Predictive maintenance that settles its own invoice. The agent buys the bearing before the line stops, into on-chain escrow, under a spend limit a human signed once.
 ```
-*(162 characters, 27 words)*
+*(165 characters)*
 
 ## Sector (max 4)
 

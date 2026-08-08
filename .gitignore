@@ -23,3 +23,6 @@ docs/page@*.webm
 
 # Ingested telemetry — a plant's own readings, not the repo's
 data/
+
+# Assembled by scripts/submission.mjs from files that already live elsewhere.
+submission/

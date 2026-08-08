@@ -22,7 +22,8 @@
     "voice": "node --env-file=.env scripts/voice.mjs",
     "capture": "node scripts/capture.mjs",
     "video:studio": "remotion studio video/index.ts",
-    "video:pitch": "remotion render video/index.ts Pitch public/pitch.mp4 --crf 26"
+    "video:pitch": "remotion render video/index.ts Pitch public/pitch.mp4 --crf 26",
+    "submission": "node scripts/submission.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
