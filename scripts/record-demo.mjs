@@ -60,7 +60,27 @@ async function resetBoard() {
   await beat(5); // let the reads catch up before the browser opens
 }
 
-const say = (msg) => console.log(`  ${msg}`);
+/**
+ * Every beat, with the second it happened at.
+ *
+ * The steps have no fixed length — the agent ones wait for text to appear, and
+ * how long that takes depends on the model and the chain that day. Narration
+ * written against guessed timings would drift differently in every recording,
+ * which is the mistake the pitch video avoids by measuring. So the recording
+ * writes down when each thing actually happened, and the narration is hung off
+ * that.
+ *
+ * Zero is when the browser context starts recording, not when this script
+ * starts: the reset happens before the camera is on.
+ */
+const timeline = [];
+let recordingFrom = null;
+
+const say = (msg) => {
+  const at = recordingFrom === null ? null : (Date.now() - recordingFrom) / 1000;
+  if (at !== null) timeline.push({ label: msg, at: Number(at.toFixed(2)) });
+  console.log(at === null ? `  ${msg}` : `  [${at.toFixed(1)}s] ${msg}`);
+};
 
 await resetBoard();
 
@@ -71,6 +91,7 @@ const context = await browser.newContext({
   deviceScaleFactor: 1,
 });
 const page = await context.newPage();
+recordingFrom = Date.now();
 
 try {
   say("opening the control room");
@@ -191,18 +212,26 @@ try {
   const mb = (fs.statSync(target).size / 1e6).toFixed(1);
   console.log(`\nwrote ${target} (${mb} MB, down from ${rawMb} MB)`);
 
-  /* Playwright records VP9 webm, which Safari will not play — so a judge on a
-     Mac opening the site gets an empty box. The copy the site serves is H.264,
-     written here rather than by hand so the two cannot drift apart. */
-  execFileSync("ffmpeg", [
-    "-v", "error",
-    "-i", target,
-    "-c:v", "libx264", "-preset", "slow", "-crf", "28",
-    "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an",
-    "public/demo.mp4", "-y",
-  ]);
-  const servable = (fs.statSync("public/demo.mp4").size / 1e6).toFixed(1);
-  console.log(`wrote public/demo.mp4 (${servable} MB) — this is the one the site links`);
+  /* The recording's length, probed from the file rather than measured off the
+     wall clock. The clock kept running through both ffmpeg passes, so the
+     timeline claimed 430 seconds for a 139-second video and the narrated cut
+     rendered four minutes of frozen last frame. */
+  const seconds = Number(
+    execFileSync("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=nw=1:nk=1",
+      target,
+    ]).toString().trim(),
+  );
+
+  fs.mkdirSync("video", { recursive: true });
+  fs.writeFileSync(
+    "video/demo-timeline.json",
+    `${JSON.stringify({ duration: seconds, beats: timeline }, null, 2)}
+`,
+  );
+  console.log(`wrote video/demo-timeline.json (${timeline.length} beats, ${seconds.toFixed(1)}s)`);
 } catch {
   // No ffmpeg: keep the raw file rather than losing the recording.
   if (webm.f !== "demo.webm") {

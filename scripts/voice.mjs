@@ -17,6 +17,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { LINES } from "../video/script.ts";
+import { DEMO_LINES } from "../video/demo-script.ts";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -25,7 +26,17 @@ const arg = (name, fallback) => {
 
 const VOICE = arg("voice", "am_adam");
 const SPEED = Number(arg("speed", "0.95"));
-const OUT = "video/public/vo";
+
+/**
+ * Two tracks: the pitch, whose lines run back to back, and the demo, whose
+ * lines are pinned to beats the recording timed itself. They share the
+ * renderer and the cache; only the timing model differs.
+ */
+const TRACK = arg("track", "pitch");
+const DEMO = TRACK === "demo";
+const OUT = DEMO ? "video/public/vo-demo" : "video/public/vo";
+const TIMINGS = DEMO ? "video/demo-vo.json" : "video/timings.json";
+const SOURCE = DEMO ? DEMO_LINES.map((l, i) => ({ ...l, id: String(i + 1).padStart(2, "0") })) : LINES;
 
 const key = process.env.VENICE_API_KEY;
 if (!key) throw new Error("VENICE_API_KEY missing — run with --env-file=.env");
@@ -47,15 +58,15 @@ const durationOf = (file) =>
 const stamp = (line) =>
   createHash("sha256").update(`${VOICE}:${SPEED}:${line.say}`).digest("hex").slice(0, 12);
 
-const previous = fs.existsSync("video/timings.json")
-  ? JSON.parse(fs.readFileSync("video/timings.json", "utf8"))
+const previous = fs.existsSync(TIMINGS)
+  ? JSON.parse(fs.readFileSync(TIMINGS, "utf8"))
   : { lines: [] };
 const cached = new Map(previous.lines.map((l) => [l.id, l]));
 
 const out = [];
 let at = 0;
 
-for (const line of LINES) {
+for (const line of SOURCE) {
   const file = path.join(OUT, `${line.id}.wav`);
   const hash = stamp(line);
   const hit = cached.get(line.id);
@@ -84,12 +95,75 @@ for (const line of LINES) {
   const duration = durationOf(file);
   const gap = line.scene === "close" ? 1.6 : 0.45;
 
-  out.push({ ...line, hash, file: `vo/${line.id}.wav`, start: at, duration, gap });
+  out.push({
+    ...line,
+    hash,
+    file: `${DEMO ? "vo-demo" : "vo"}/${line.id}.wav`,
+    start: at,
+    duration,
+    gap,
+  });
   at += duration + gap;
 }
 
-const timings = { voice: VOICE, speed: SPEED, total: at, lines: out };
-fs.writeFileSync("video/timings.json", `${JSON.stringify(timings, null, 2)}\n`);
+if (DEMO) {
+  /* Pin each line to the second its beat happened at. The recording measured
+     those; stacking durations would put the narration wherever the previous
+     line happened to end, which is not where the picture is. */
+  const timeline = JSON.parse(fs.readFileSync("video/demo-timeline.json", "utf8"));
+  const beatAt = new Map(timeline.beats.map((b) => [b.label, b.at]));
+
+  for (const line of out) {
+    const at = beatAt.get(line.beat);
+    if (at === undefined) {
+      throw new Error(
+        `no beat "${line.beat}" in the recording's timeline — re-record, or fix the label`,
+      );
+    }
+    line.beatAt = at;
+  }
+  out.sort((a, b) => a.beatAt - b.beatAt);
+
+  /**
+   * Never before its beat, never over the line before it.
+   *
+   * Pinning every line hard to its beat made five of them talk over each
+   * other, because the recording's pacing was set for watching, not for
+   * narrating. Cramming the script to fit 2-second gaps would have meant
+   * writing to a stopwatch instead of to the picture.
+   *
+   * A narrator finishing a sentence while the picture moves on is normal and
+   * reads fine; two voices at once does not. So each line starts at its beat
+   * or when the previous one finishes, whichever is later — the order and the
+   * meaning hold, and only the tightest sections run slightly behind.
+   */
+  let cursor = 0;
+  for (const line of out) {
+    line.start = Math.max(line.beatAt, cursor);
+    cursor = line.start + line.duration + 0.35;
+    const behind = line.start - line.beatAt;
+    if (behind > 0.5) {
+      console.log(`  ~ "${line.beat}" starts ${behind.toFixed(1)}s after its beat`);
+    }
+  }
+
+  const overrun = cursor - timeline.duration;
+  if (overrun > 0) {
+    console.warn(
+      `\n  ! the narration runs ${overrun.toFixed(1)}s past the end of the recording — shorten a line`,
+    );
+  }
+}
+
+const timings = {
+  voice: VOICE,
+  speed: SPEED,
+  total: DEMO
+    ? JSON.parse(fs.readFileSync("video/demo-timeline.json", "utf8")).duration
+    : at,
+  lines: out,
+};
+fs.writeFileSync(TIMINGS, `${JSON.stringify(timings, null, 2)}\n`);
 
 /**
  * The same timings as SubRip, for anywhere the burned-in captions are not
@@ -107,7 +181,7 @@ const stampSrt = (seconds) => {
 };
 
 fs.writeFileSync(
-  "docs/pitch.srt",
+  DEMO ? "docs/demo.srt" : "docs/pitch.srt",
   out
     .map(
       (l, i) =>
@@ -116,5 +190,5 @@ fs.writeFileSync(
     .join("\n"),
 );
 
-console.log(`\n${out.length} lines, ${at.toFixed(1)}s total, voice ${VOICE}`);
-console.log("wrote video/timings.json and docs/pitch.srt");
+console.log(`\n${out.length} lines, voice ${VOICE}`);
+console.log(`wrote ${TIMINGS} and docs/${DEMO ? "demo" : "pitch"}.srt`);

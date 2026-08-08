@@ -52,13 +52,20 @@ be watched:
 
 | | | |
 |---|---|---|
-| **Demo** | [foreman-six-psi.vercel.app/demo.mp4](https://foreman-six-psi.vercel.app/demo.mp4) | 2m19s — the whole loop, unedited, recorded straight off the running app. Every figure in it is a real transaction against the contract above |
+| **Demo** | [foreman-six-psi.vercel.app/demo.mp4](https://foreman-six-psi.vercel.app/demo.mp4) | 2m10s — the whole loop, unedited, narrated, captioned. Every figure in it is a real transaction against the contract above |
 | **Pitch** | [foreman-six-psi.vercel.app/pitch.mp4](https://foreman-six-psi.vercel.app/pitch.mp4) | 2m01s — narrated, captioned |
 
-The demo is recorded by `scripts/record-demo.mjs`, which drives the real app
-with Playwright. It writes `docs/demo.webm` and the H.264 copy the site serves
-— Playwright records VP9, which Safari will not play, so the two are produced
-together rather than by hand.
+The demo picture is untouched: `scripts/record-demo.mjs` drives the real app
+with Playwright and writes `docs/demo.webm`, and nothing re-creates or re-times
+it afterwards. What is added is the voice and the captions.
+
+Which is the part worth explaining. The recording has no fixed pacing — the
+agent steps wait for text to appear, and how long that takes depends on the
+model and the chain that day. So the recording writes down the second each
+beat actually happened at (`video/demo-timeline.json`), and the narration hangs
+off that. A line is never spoken before the thing it describes is on screen,
+and never over the line before it; where those two rules conflict the script
+tells you which line to shorten rather than shipping two voices at once.
 
 **The pitch** — two minutes, narrated, with captions
 ([`docs/pitch.srt`](docs/pitch.srt) for anywhere burned-in is not enough).

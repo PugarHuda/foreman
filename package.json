@@ -23,6 +23,7 @@
     "capture": "node scripts/capture.mjs",
     "video:studio": "remotion studio video/index.ts",
     "video:pitch": "remotion render video/index.ts Pitch public/pitch.mp4 --crf 26",
+    "video:demo": "node scripts/demo-video.mjs",
     "submission": "node scripts/submission.mjs"
   },
   "devDependencies": {

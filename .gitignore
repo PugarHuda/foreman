@@ -26,3 +26,6 @@ data/
 
 # Assembled by scripts/submission.mjs from files that already live elsewhere.
 submission/
+
+# Copied in at render time from public/demo.mp4 — one canonical copy, not two.
+video/public/demo-source.mp4

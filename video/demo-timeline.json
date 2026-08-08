@@ -1,0 +1,57 @@
+{
+  "duration": 129.72,
+  "beats": [
+    {
+      "label": "opening the control room",
+      "at": 0
+    },
+    {
+      "label": "CNC-07 is the one degrading",
+      "at": 5
+    },
+    {
+      "label": "the trend and its projection to Zone D",
+      "at": 8.06
+    },
+    {
+      "label": "who the plant will pay, and nobody else",
+      "at": 12.09
+    },
+    {
+      "label": "running the agent on the routine lane",
+      "at": 16.12
+    },
+    {
+      "label": "capturing the README still",
+      "at": 49.18
+    },
+    {
+      "label": "advancing the run hour into Zone C",
+      "at": 51.23
+    },
+    {
+      "label": "now the bearing will not save it — the agent escalates",
+      "at": 55.25
+    },
+    {
+      "label": "it stops, because $4,000 is over the ceiling",
+      "at": 80.09
+    },
+    {
+      "label": "a human approves",
+      "at": 88.08
+    },
+    {
+      "label": "settling the bearing order",
+      "at": 99.11
+    },
+    {
+      "label": "issuing the part to the machine",
+      "at": 113.2
+    },
+    {
+      "label": "final position",
+      "at": 123.62
+    }
+  ]
+}

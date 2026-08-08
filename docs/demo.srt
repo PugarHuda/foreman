@@ -1,0 +1,44 @@
+1
+00:00:00,000 --> 00:00:13,200
+The control room, live on Base Sepolia.
+CNC-07 is degrading: Zone B, 58 hours left.
+
+2
+00:00:16,120 --> 00:00:36,945
+The agent reads the trend, the shelf, what is on order,
+and prices it against vetted suppliers.
+$180 is under the ceiling — it funds it alone.
+
+3
+00:00:51,230 --> 00:00:55,680
+Advance the run hour. The machine crosses into Zone C.
+
+4
+00:00:56,030 --> 00:01:06,230
+By Zone C a bearing no longer saves it.
+The agent escalates to the spindle.
+
+5
+00:01:20,090 --> 00:01:26,565
+$4,000 is over the ceiling. It stops.
+The order exists. No money moved.
+
+6
+00:01:28,080 --> 00:01:36,080
+A human approves, from a separate key.
+The cap bounds the agent, not the plant.
+
+7
+00:01:39,110 --> 00:01:48,735
+The supplier commits a waybill with their own key.
+Escrow releases only against a match.
+
+8
+00:01:53,200 --> 00:01:59,700
+The part leaves the store — which is what lets
+the agent order the next one.
+
+9
+00:02:03,620 --> 00:02:14,045
+Every figure is a transaction you can look up.
+$180 committed alone. Stopped at $4,000.

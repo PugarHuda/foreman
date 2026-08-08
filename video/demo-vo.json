@@ -1,0 +1,115 @@
+{
+  "voice": "am_adam",
+  "speed": 0.95,
+  "total": 430.151,
+  "lines": [
+    {
+      "beat": "opening the control room",
+      "say": "This is the control room, live on Base Sepolia. Three machines, and a fifty thousand dollar treasury. C N C oh seven is the one degrading — zone B, with fifty-eight hours before it must be stopped.",
+      "caption": "The control room, live on Base Sepolia.\nCNC-07 is degrading: Zone B, 58 hours left.",
+      "id": "01",
+      "hash": "e5a5a00ffa7c",
+      "file": "vo-demo/01.wav",
+      "start": 0,
+      "duration": 13.2,
+      "gap": 0.45,
+      "beatAt": 0
+    },
+    {
+      "beat": "running the agent on the routine lane",
+      "say": "Now the agent runs. It reads the trend, checks the shelf and what is already on order, and prices the part against the two suppliers the plant has vetted. This is the model deciding, not a replay. Zero in stock, a supplier who can deliver inside the window — and one hundred and eighty dollars is under the ceiling, so it signs and funds it alone.",
+      "caption": "The agent reads the trend, the shelf, what is on order,\nand prices it against vetted suppliers.\n$180 is under the ceiling — it funds it alone.",
+      "id": "02",
+      "hash": "19b8a447917f",
+      "file": "vo-demo/02.wav",
+      "start": 16.12,
+      "duration": 20.825,
+      "gap": 0.45,
+      "beatAt": 16.12
+    },
+    {
+      "beat": "advancing the run hour into Zone C",
+      "say": "Advance the run hour, and the machine crosses into zone C.",
+      "caption": "Advance the run hour. The machine crosses into Zone C.",
+      "id": "03",
+      "hash": "0e0c689ea31d",
+      "file": "vo-demo/03.wav",
+      "start": 51.23,
+      "duration": 4.45,
+      "gap": 0.45,
+      "beatAt": 51.23
+    },
+    {
+      "beat": "now the bearing will not save it — the agent escalates",
+      "say": "A bearing no longer saves it. By zone C the shaft is already scored, so the agent escalates to the spindle cartridge — a different part, and a very different number.",
+      "caption": "By Zone C a bearing no longer saves it.\nThe agent escalates to the spindle.",
+      "id": "04",
+      "hash": "d29ee5d78971",
+      "file": "vo-demo/04.wav",
+      "start": 56.03,
+      "duration": 10.2,
+      "gap": 0.45,
+      "beatAt": 55.25
+    },
+    {
+      "beat": "it stops, because $4,000 is over the ceiling",
+      "say": "Four thousand dollars is over the ceiling. It stops. The order exists, and no money has moved.",
+      "caption": "$4,000 is over the ceiling. It stops.\nThe order exists. No money moved.",
+      "id": "05",
+      "hash": "8cfda3a5dbb8",
+      "file": "vo-demo/05.wav",
+      "start": 80.09,
+      "duration": 6.475,
+      "gap": 0.45,
+      "beatAt": 80.09
+    },
+    {
+      "beat": "a human approves",
+      "say": "A human approves it, from a separate key. That approval bypasses the cap — because the cap bounds the agent, not the plant.",
+      "caption": "A human approves, from a separate key.\nThe cap bounds the agent, not the plant.",
+      "id": "06",
+      "hash": "a0566a619ecb",
+      "file": "vo-demo/06.wav",
+      "start": 88.08,
+      "duration": 8,
+      "gap": 0.45,
+      "beatAt": 88.08
+    },
+    {
+      "beat": "settling the bearing order",
+      "say": "Back to the bearing. The supplier despatches, committing to the waybill with their own key, and goods-in confirms against it. Only then does escrow release.",
+      "caption": "The supplier commits a waybill with their own key.\nEscrow releases only against a match.",
+      "id": "07",
+      "hash": "4d4eb9b84125",
+      "file": "vo-demo/07.wav",
+      "start": 99.11,
+      "duration": 9.625,
+      "gap": 0.45,
+      "beatAt": 99.11
+    },
+    {
+      "beat": "issuing the part to the machine",
+      "say": "The part is issued to the machine. It leaves the store, which is what lets the agent order the next one.",
+      "caption": "The part leaves the store — which is what lets\nthe agent order the next one.",
+      "id": "08",
+      "hash": "0a15c0969fd0",
+      "file": "vo-demo/08.wav",
+      "start": 113.2,
+      "duration": 6.5,
+      "gap": 0.45,
+      "beatAt": 113.2
+    },
+    {
+      "beat": "final position",
+      "say": "Every figure on this screen is a transaction you can look up on a block explorer. The agent committed one hundred and eighty dollars on its own, and stopped at four thousand.",
+      "caption": "Every figure is a transaction you can look up.\n$180 committed alone. Stopped at $4,000.",
+      "id": "09",
+      "hash": "4c9e4f0e8c4e",
+      "file": "vo-demo/09.wav",
+      "start": 123.62,
+      "duration": 10.425,
+      "gap": 0.45,
+      "beatAt": 123.62
+    }
+  ]
+}
