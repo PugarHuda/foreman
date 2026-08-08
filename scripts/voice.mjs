@@ -36,7 +36,9 @@ const TRACK = arg("track", "pitch");
 const DEMO = TRACK === "demo";
 const OUT = DEMO ? "video/public/vo-demo" : "video/public/vo";
 const TIMINGS = DEMO ? "video/demo-vo.json" : "video/timings.json";
-const SOURCE = DEMO ? DEMO_LINES.map((l, i) => ({ ...l, id: String(i + 1).padStart(2, "0") })) : LINES;
+const SOURCE = DEMO
+  ? DEMO_LINES.map((l, i) => ({ ...l, id: String(i + 1).padStart(2, "0") }))
+  : LINES;
 
 const key = process.env.VENICE_API_KEY;
 if (!key) throw new Error("VENICE_API_KEY missing — run with --env-file=.env");
@@ -113,6 +115,8 @@ if (DEMO) {
   const timeline = JSON.parse(fs.readFileSync("video/demo-timeline.json", "utf8"));
   const beatAt = new Map(timeline.beats.map((b) => [b.label, b.at]));
 
+  const beatBox = new Map(timeline.beats.map((b) => [b.label, b.box ?? null]));
+
   for (const line of out) {
     const at = beatAt.get(line.beat);
     if (at === undefined) {
@@ -120,7 +124,8 @@ if (DEMO) {
         `no beat "${line.beat}" in the recording's timeline — re-record, or fix the label`,
       );
     }
-    line.beatAt = at;
+    line.beatAt = at + (line.after ?? 0);
+    line.rect = line.box ? beatBox.get(line.beat) : null;
   }
   out.sort((a, b) => a.beatAt - b.beatAt);
 
@@ -138,14 +143,24 @@ if (DEMO) {
    * meaning hold, and only the tightest sections run slightly behind.
    */
   let cursor = 0;
+  const kept = [];
   for (const line of out) {
+    /* An optional line whose slot has already closed is dropped rather than
+       queued: it exists to fill a gap, and there is no gap left. */
+    if (line.optional && line.beatAt < cursor) {
+      console.log(`  - dropped filler at +${(line.after ?? 0)}s — no gap to fill`);
+      continue;
+    }
     line.start = Math.max(line.beatAt, cursor);
     cursor = line.start + line.duration + 0.35;
+    kept.push(line);
     const behind = line.start - line.beatAt;
     if (behind > 0.5) {
       console.log(`  ~ "${line.beat}" starts ${behind.toFixed(1)}s after its beat`);
     }
   }
+  out.length = 0;
+  out.push(...kept);
 
   const overrun = cursor - timeline.duration;
   if (overrun > 0) {
@@ -153,6 +168,22 @@ if (DEMO) {
       `\n  ! the narration runs ${overrun.toFixed(1)}s past the end of the recording — shorten a line`,
     );
   }
+
+  /* Silence is the thing this is meant to avoid, so it gets counted here
+     rather than left for somebody to notice on playback. */
+  let spoken = 0;
+  let mark = 0;
+  for (const line of out) {
+    const gap = line.start - mark;
+    if (gap > 1.5) console.warn(`  ! ${gap.toFixed(1)}s of silence before "${line.beat}"`);
+    spoken += line.duration;
+    mark = line.start + line.duration;
+  }
+  const tail = timeline.duration - mark;
+  if (tail > 1.5) console.warn(`  ! ${tail.toFixed(1)}s of silence at the end`);
+  console.log(
+    `\n  narration covers ${Math.round((spoken / timeline.duration) * 100)}% of ${timeline.duration.toFixed(1)}s`,
+  );
 }
 
 const timings = {

@@ -1,44 +1,92 @@
 1
-00:00:00,000 --> 00:00:13,200
+00:00:00,000 --> 00:00:06,600
 The control room, live on Base Sepolia.
-CNC-07 is degrading: Zone B, 58 hours left.
+Three machines, a $50,000 treasury.
 
 2
-00:00:16,120 --> 00:00:36,945
-The agent reads the trend, the shelf, what is on order,
-and prices it against vetted suppliers.
-$180 is under the ceiling — it funds it alone.
+00:00:06,950 --> 00:00:12,475
+CNC-07 is degrading — 58 hours left.
 
 3
-00:00:51,230 --> 00:00:55,680
-Advance the run hour. The machine crosses into Zone C.
+00:00:12,825 --> 00:00:16,750
+The projection, fitted to the trend.
 
 4
-00:00:56,030 --> 00:01:06,230
+00:00:17,100 --> 00:00:20,525
+The only addresses the plant will pay.
+The contract rejects any other.
+
+5
+00:00:20,875 --> 00:00:23,050
+The agent runs.
+
+6
+00:00:23,400 --> 00:00:33,600
+It reads machine health, then the shelf — on hand
+and already on order.
+
+7
+00:00:33,950 --> 00:00:44,025
+Then the quotes, with each supplier's record
+read off the order book.
+
+8
+00:00:50,280 --> 00:01:02,305
+The reasoning streams as it happens.
+The sequence is the part worth watching.
+
+9
+00:01:02,655 --> 00:01:10,380
+$180 is under the ceiling — it signs and funds it alone.
+
+10
+00:01:10,730 --> 00:01:15,180
+Advance the run hour. The machine crosses into Zone C.
+
+11
+00:01:15,530 --> 00:01:23,380
 By Zone C a bearing no longer saves it.
 The agent escalates to the spindle.
 
-5
-00:01:20,090 --> 00:01:26,565
+12
+00:01:23,730 --> 00:01:28,055
+A different part — and a very different number.
+
+13
+00:01:28,405 --> 00:01:37,605
+It checks the other two and orders nothing —
+one is covered, the other's trend is untrustworthy.
+
+14
+00:01:43,050 --> 00:01:53,475
+Every step is a tool call against the plant's systems.
+It is not narrating a decision already made.
+
+15
+00:01:53,825 --> 00:02:00,325
 $4,000 is over the ceiling. It stops.
 The order exists. No money moved.
 
-6
-00:01:28,080 --> 00:01:36,080
+16
+00:02:00,675 --> 00:02:08,675
 A human approves, from a separate key.
 The cap bounds the agent, not the plant.
 
-7
-00:01:39,110 --> 00:01:48,735
+17
+00:02:09,025 --> 00:02:14,575
 The supplier commits a waybill with their own key.
-Escrow releases only against a match.
 
-8
-00:01:53,200 --> 00:01:59,700
+18
+00:02:14,925 --> 00:02:21,000
+Goods-in confirms against it.
+Only then does escrow release.
+
+19
+00:02:21,350 --> 00:02:27,850
 The part leaves the store — which is what lets
 the agent order the next one.
 
-9
-00:02:03,620 --> 00:02:14,045
+20
+00:02:29,560 --> 00:02:36,435
 Every figure is a transaction you can look up.
 $180 committed alone. Stopped at $4,000.

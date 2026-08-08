@@ -47,7 +47,7 @@ async function resetBoard() {
   );
   if (!open.length) return;
 
-  say(`clearing ${open.length} order(s) left from a previous run`);
+  await say(`clearing ${open.length} order(s) left from a previous run`);
   for (const po of open) {
     const action = po.status === "Released" ? "fit" : "cancel";
     const res = await fetch(`${BASE}/api/po`, {
@@ -76,10 +76,47 @@ async function resetBoard() {
 const timeline = [];
 let recordingFrom = null;
 
-const say = (msg) => {
+/**
+ * Optionally records where the thing being talked about was on screen.
+ *
+ * The narrated cut draws a box around it, and a box at a position measured
+ * afterwards would point at the wrong place: the page scrolls during the run
+ * and the agent panel grows as its log fills. So the position is taken at the
+ * moment the beat happens, in viewport coordinates, which is what the frame
+ * shows.
+ */
+const say = async (msg, selector) => {
+  /* Call this *after* whatever moves the page. A box measured from the
+     viewport as it was before a scroll frames whatever has since slid into
+     that rectangle — one of them ended up around a paragraph of log text. */
   const at = recordingFrom === null ? null : (Date.now() - recordingFrom) / 1000;
-  if (at !== null) timeline.push({ label: msg, at: Number(at.toFixed(2)) });
-  console.log(at === null ? `  ${msg}` : `  [${at.toFixed(1)}s] ${msg}`);
+  let box = null;
+
+  if (selector && at !== null) {
+    try {
+      const el = page.locator(selector).first();
+      if (await el.count()) box = await el.boundingBox();
+    } catch {
+      /* A region that cannot be measured is a box not drawn, not a failed
+         recording. */
+    }
+  }
+
+  if (at !== null) {
+    timeline.push({
+      label: msg,
+      at: Number(at.toFixed(2)),
+      box: box
+        ? {
+            x: Math.round(box.x),
+            y: Math.round(box.y),
+            w: Math.round(box.width),
+            h: Math.round(box.height),
+          }
+        : null,
+    });
+  }
+  console.log(at === null ? `  ${msg}` : `  [${at.toFixed(1)}s] ${msg}${box ? " ▢" : ""}`);
 };
 
 await resetBoard();
@@ -94,7 +131,7 @@ const page = await context.newPage();
 recordingFrom = Date.now();
 
 try {
-  say("opening the control room");
+  await say("opening the control room");
   await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
   // The dev-server badge is Next's, not the plant's. It has no business in a
   // recording or in the README hero.
@@ -102,19 +139,21 @@ try {
   await page.locator(".machine").first().waitFor();
   await beat(4); // let the treasury strip and machine cards land
 
-  say("CNC-07 is the one degrading");
+  await say("CNC-07 is the one degrading", ".machines");
   await page.locator(".machine", { hasText: "CNC-07" }).hover();
   await beat(3);
 
-  say("the trend and its projection to Zone D");
   await page.locator("svg[role=img]").scrollIntoViewIfNeeded();
-  await beat(4);
+  await beat(0.6);
+  await say("the trend and its projection to Zone D", ".panel:has(> header h2:text-matches('vibration trend'))");
+  await beat(3.4);
 
-  say("who the plant will pay, and nobody else");
   await page.locator(".panel", { hasText: "Approved suppliers" }).scrollIntoViewIfNeeded();
-  await beat(4);
+  await beat(0.6);
+  await say("who the plant will pay, and nobody else", ".panel:has(> header h2:text-matches('Approved suppliers'))");
+  await beat(3.4);
 
-  say("running the agent on the routine lane");
+  await say("running the agent on the routine lane");
   await page.mouse.wheel(0, -600);
   await beat(1);
   await page.getByRole("button", { name: "Run agent" }).click();
@@ -124,40 +163,43 @@ try {
   // Shot here, not on a fresh load: the still is the one thing a judge sees
   // before deciding whether to watch anything, and a control room with an
   // empty agent panel argues the opposite of the caption under it.
-  say("capturing the README still");
   await page.mouse.wheel(0, -2000);
-  await beat(2);
+  await beat(0.6);
+  await say("capturing the README still", ".panel:has(> header h2:text-is('Agent'))");
+  await beat(1.4);
   await page.screenshot({ path: path.join(OUT, "dashboard.png"), fullPage: true });
 
   if (STILL_ONLY) {
-    say("STILL_ONLY — stopping before the human lane");
+    await say("STILL_ONLY — stopping before the human lane");
     await context.close();
     await browser.close();
     process.exit(0);
   }
 
-  say("advancing the run hour into Zone C");
+  await say("advancing the run hour into Zone C", ".masthead");
   await page.locator('input[type="range"]').fill("320");
   await beat(4);
 
-  say("now the bearing will not save it — the agent escalates");
+  await say("now the bearing will not save it — the agent escalates");
   await page.getByRole("button", { name: "Run agent" }).click();
   await page.getByText("queued for human approval").first().waitFor({ timeout: 180_000 });
   await beat(5);
 
-  say("it stops, because $4,000 is over the ceiling");
   const approve = page.getByRole("button", { name: /^Approve \$/ }).first();
   await approve.scrollIntoViewIfNeeded();
-  await beat(3);
+  await beat(0.6);
+  await say("it stops, because $4,000 is over the ceiling", ".panel:has(> header h2:text-is('Waiting on you'))");
+  await beat(2.4);
 
-  say("a human approves");
+  await say("a human approves", ".panel:has(> header h2:text-is('Waiting on you'))");
   await approve.click();
   await page.getByText("Nothing waiting on you.").waitFor({ timeout: 120_000 });
   await beat(4);
 
-  say("settling the bearing order");
   await page.locator(".panel", { hasText: "Purchase orders" }).scrollIntoViewIfNeeded();
-  await beat(2);
+  await beat(0.6);
+  await say("settling the bearing order", ".panel:has(> header h2:text-is('Purchase orders'))");
+  await beat(1.4);
   const ship = page.getByRole("button", { name: "Supplier ships" }).first();
   await ship.click();
   await beat(6);
@@ -165,17 +207,19 @@ try {
   await confirm.click();
   await beat(6);
 
-  say("issuing the part to the machine");
   const fit = page.getByRole("button", { name: "Fit to machine" }).first();
   await fit.waitFor({ timeout: 60_000 });
   await fit.scrollIntoViewIfNeeded();
-  await beat(3);
+  await beat(0.6);
+  await say("issuing the part to the machine", ".panel:has(> header h2:text-is('Purchase orders'))");
+  await beat(2.4);
   await fit.click();
   await beat(6); // it leaves the store, which is what lets the next run order
 
-  say("final position");
   await page.mouse.wheel(0, -2000);
-  await beat(6);
+  await beat(0.6);
+  await say("final position", ".strip");
+  await beat(5.4);
 } finally {
   await context.close(); // flushes the video
   await browser.close();

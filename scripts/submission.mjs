@@ -20,7 +20,7 @@ const OUT = "submission";
 /** Named for the field they go in, not for where they came from. */
 const FILES = [
   ["public/pitch.mp4", "pitch-video.mp4", "Pitch Video — 2m01s, 1920x1080, narrated, captions burned in"],
-  ["public/demo.mp4", "demo-video.mp4", "Demo Video — 2m10s, narrated, captioned, the real app"],
+  ["public/demo.mp4", "demo-video.mp4", "Demo Video — 2m35s, narrated, captioned, annotated, the real app"],
   ["docs/pitch.srt", "pitch-subtitles.srt", "Subtitle track for the pitch"],
   ["docs/demo.srt", "demo-subtitles.srt", "Subtitle track for the demo"],
   ["public/brand/01-the-problem.png", "image-1-the-problem.png", "Image 1 — 1280x720"],

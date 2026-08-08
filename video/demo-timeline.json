@@ -1,57 +1,120 @@
 {
-  "duration": 129.72,
+  "duration": 154.68,
   "beats": [
     {
       "label": "opening the control room",
-      "at": 0
+      "at": 0,
+      "box": null
     },
     {
       "label": "CNC-07 is the one degrading",
-      "at": 5
+      "at": 5.1,
+      "box": {
+        "x": 141,
+        "y": 218,
+        "w": 791,
+        "h": 191
+      }
     },
     {
       "label": "the trend and its projection to Zone D",
-      "at": 8.06
+      "at": 8.8,
+      "box": {
+        "x": 140,
+        "y": 426,
+        "w": 793,
+        "h": 290
+      }
     },
     {
       "label": "who the plant will pay, and nobody else",
-      "at": 12.09
+      "at": 12.85,
+      "box": {
+        "x": 140,
+        "y": 732,
+        "w": 793,
+        "h": 295
+      }
     },
     {
       "label": "running the agent on the routine lane",
-      "at": 16.12
+      "at": 16.28,
+      "box": null
     },
     {
       "label": "capturing the README still",
-      "at": 49.18
+      "at": 55.54,
+      "box": {
+        "x": 949,
+        "y": 180,
+        "w": 511,
+        "h": 542
+      }
     },
     {
       "label": "advancing the run hour into Zone C",
-      "at": 51.23
+      "at": 57.04,
+      "box": {
+        "x": 140,
+        "y": 24,
+        "w": 1320,
+        "h": 39
+      }
     },
     {
       "label": "now the bearing will not save it — the agent escalates",
-      "at": 55.25
+      "at": 61.05,
+      "box": null
     },
     {
       "label": "it stops, because $4,000 is over the ceiling",
-      "at": 80.09
+      "at": 111.48,
+      "box": {
+        "x": 949,
+        "y": 655,
+        "w": 511,
+        "h": 163
+      }
     },
     {
       "label": "a human approves",
-      "at": 88.08
+      "at": 113.9,
+      "box": {
+        "x": 949,
+        "y": 655,
+        "w": 511,
+        "h": 163
+      }
     },
     {
       "label": "settling the bearing order",
-      "at": 99.11
+      "at": 125.03,
+      "box": {
+        "x": 949,
+        "y": 789,
+        "w": 511,
+        "h": 310
+      }
     },
     {
       "label": "issuing the part to the machine",
-      "at": 113.2
+      "at": 140.49,
+      "box": {
+        "x": 949,
+        "y": 789,
+        "w": 511,
+        "h": 348
+      }
     },
     {
       "label": "final position",
-      "at": 123.62
+      "at": 149.56,
+      "box": {
+        "x": 140,
+        "y": 79,
+        "w": 1320,
+        "h": 85
+      }
     }
   ]
 }

@@ -78,8 +78,9 @@ lead with the real thing.
 https://foreman-six-psi.vercel.app/demo.mp4
 ```
 
-2m10s, 1920x1080, narrated with burned-in captions. The picture is the
-untouched Playwright capture of the real app — every figure in it is a real
+2m35s, 1920x1080, narrated with burned-in captions and a frame drawn around
+whatever is being described. The picture is the untouched Playwright capture
+of the real app — every figure in it is a real
 transaction against the deployed contract. Repo copy: `public/demo.mp4`
 (`docs/demo.webm` is the raw capture, `docs/demo.srt` the subtitle track).
 

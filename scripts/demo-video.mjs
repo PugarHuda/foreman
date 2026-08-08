@@ -28,10 +28,10 @@ if (!fs.existsSync("video/demo-vo.json")) {
 fs.copyFileSync(SOURCE, WORKING);
 execFileSync(
   "npx",
-  ["remotion", "render", "video/index.ts", "Demo", "public/demo-narrated.mp4", "--crf", "28"],
+  ["remotion", "render", "video/index.ts", "Demo", "public/demo.mp4", "--crf", "28"],
   { stdio: "inherit", shell: true },
 );
 fs.rmSync(WORKING, { force: true });
 
-const mb = (fs.statSync("public/demo-narrated.mp4").size / 1e6).toFixed(1);
-console.log(`\nwrote public/demo-narrated.mp4 (${mb} MB)`);
+const mb = (fs.statSync("public/demo.mp4").size / 1e6).toFixed(1);
+console.log(`\nwrote public/demo.mp4 (${mb} MB) — narrated, annotated, and the one the site links`);

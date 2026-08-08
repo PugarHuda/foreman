@@ -52,20 +52,36 @@ be watched:
 
 | | | |
 |---|---|---|
-| **Demo** | [foreman-six-psi.vercel.app/demo.mp4](https://foreman-six-psi.vercel.app/demo.mp4) | 2m10s — the whole loop, unedited, narrated, captioned. Every figure in it is a real transaction against the contract above |
+| **Demo** | [foreman-six-psi.vercel.app/demo.mp4](https://foreman-six-psi.vercel.app/demo.mp4) | 2m35s — the whole loop, unedited, narrated, captioned, with a frame drawn around whatever is being described. Every figure in it is a real transaction against the contract above |
 | **Pitch** | [foreman-six-psi.vercel.app/pitch.mp4](https://foreman-six-psi.vercel.app/pitch.mp4) | 2m01s — narrated, captioned |
 
 The demo picture is untouched: `scripts/record-demo.mjs` drives the real app
 with Playwright and writes `docs/demo.webm`, and nothing re-creates or re-times
-it afterwards. What is added is the voice and the captions.
+it afterwards. What is added is the voice, the captions, and a frame around
+whatever is being described.
 
-Which is the part worth explaining. The recording has no fixed pacing — the
-agent steps wait for text to appear, and how long that takes depends on the
-model and the chain that day. So the recording writes down the second each
-beat actually happened at (`video/demo-timeline.json`), and the narration hangs
-off that. A line is never spoken before the thing it describes is on screen,
-and never over the line before it; where those two rules conflict the script
-tells you which line to shorten rather than shipping two voices at once.
+Both of those come from the recording rather than from a stopwatch. The run has
+no fixed pacing — the agent steps wait for text to appear, and how long that
+takes depends on the model and the chain that day — so the recording writes
+down the second each beat happened at **and** the on-screen box of the thing it
+is about, measured at that moment. A position measured afterwards would point
+at the wrong place: the page scrolls, and the agent panel grows as its log
+fills.
+
+`scripts/voice.mjs --track demo` then hangs the narration off that, and refuses
+to be vague about the result. It reports how much of the recording is actually
+spoken over, names any gap longer than a second and a half, names any line that
+would run past the end, and never lets one line start before its beat or over
+the line before it. The current cut is 89% narrated with no line running past
+the end — the first pass was 69% narrated, with two fourteen-second silences
+and a line arriving twenty-two seconds after the panel it described had gone.
+
+Some of the narration is marked optional, and that is what makes the number
+hold. The agent's thinking time is not fixed: it took 27 seconds in one
+recording and 50 in the next. A script written for the long run talks over
+itself on the short one; written for the short run it leaves half a minute of
+silence on the long one. So the filler lines are dropped when their slot has
+already closed, and a slow run simply uses more of them.
 
 **The pitch** — two minutes, narrated, with captions
 ([`docs/pitch.srt`](docs/pitch.srt) for anywhere burned-in is not enough).
